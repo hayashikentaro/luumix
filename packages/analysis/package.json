@@ -17,6 +17,7 @@
   "scripts": {
     "ai-input": "node ./dist/src/cli.js ai-input",
     "analyze": "node ./dist/src/cli.js analyze",
+    "apply-ai-review": "node ./dist/src/cli.js apply-ai-review",
     "build": "tsc -p tsconfig.json",
     "init-overrides": "node ./dist/src/cli.js init-overrides",
     "report": "node ./dist/src/cli.js report",

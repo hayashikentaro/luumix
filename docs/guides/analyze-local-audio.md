@@ -80,6 +80,37 @@ The generated file excludes raw audio and full feature envelopes, but it may sti
 
 When using the generated input with AI, ask it to choose from the provided candidate IDs. It should not invent new tempo, beat grid, downbeat, mix-in, or mix-out IDs.
 
+## Apply AI Review
+
+An external AI session or human reviewer can produce an `AiReview` JSON file from the generated input. The review must choose existing candidate IDs from the analysis metadata.
+
+Example review file:
+
+```json
+{
+  "selectedTempoCandidateId": "tempo-primary",
+  "selectedBeatGridCandidateId": "beat-grid-primary",
+  "selectedDownbeatCandidateId": "downbeat-phase-0",
+  "selectedMixInTransitionId": "transition-mix-in-first-downbeat",
+  "selectedMixOutTransitionId": "transition-mix-out-outro-start",
+  "autoMix": {
+    "status": "risky",
+    "reasons": ["Heuristic candidates look plausible but need listening confirmation."]
+  },
+  "notes": ["External review selected existing Luumix candidates."]
+}
+```
+
+Apply the review and generate metadata with `effective` populated:
+
+```bash
+npm run apply-ai-review -- .luumix/metadata/track.analysis.json --ai-review .luumix/metadata/track.ai-review.json --out .luumix/metadata/track.ai-reviewed.json
+```
+
+This command validates the analysis metadata, validates the AI review shape, rejects unknown candidate IDs, preserves generated analysis and manual overrides, and resolves `manualOverrides > aiReview > analysis.defaults`.
+
+Do not share or commit private AI review files or AI-reviewed metadata unless that is intentional.
+
 ## Apply Manual Overrides
 
 After inspecting the report, create an override template:

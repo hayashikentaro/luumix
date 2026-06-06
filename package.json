@@ -10,6 +10,7 @@
   "scripts": {
     "ai-input": "npm --workspace @luumix/analysis run ai-input --",
     "analyze": "npm --workspace @luumix/analysis run analyze --",
+    "apply-ai-review": "npm --workspace @luumix/analysis run apply-ai-review --",
     "build": "npm run build --workspace @luumix/metadata && npm run build --workspace @luumix/analysis",
     "init-overrides": "npm --workspace @luumix/analysis run init-overrides --",
     "report": "npm --workspace @luumix/analysis run report --",

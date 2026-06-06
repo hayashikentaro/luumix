@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseTrackAnalysisMetadata } from "@luumix/metadata";
+import { parseTrackAnalysisMetadata, type AiReview } from "@luumix/metadata";
 import {
   computeFeatureSummary,
   createFfmpegFeatureExtractor,
@@ -13,11 +13,14 @@ import {
 } from "../src/features.js";
 import {
   analyzeFile,
+  applyAiReview,
   createAiReviewInput,
   writeAiReviewInput,
+  writeAiReviewedMetadata,
   writeOverrideTemplate,
   writeResolvedMetadata,
 } from "../src/index.js";
+import { parseArgs } from "../src/cli.js";
 import {
   createFfprobeAudioProbe,
   parseFfprobeOutput,
@@ -677,6 +680,154 @@ describe("writeAiReviewInput", () => {
   });
 });
 
+describe("applyAiReview", () => {
+  it("applies a valid AI review and populates effective metadata", async () => {
+    const metadata = await createResolvableMetadata();
+    const aiReview = createAiReview(metadata, { status: "risky" });
+
+    const reviewed = applyAiReview(metadata, aiReview);
+
+    expect(reviewed.aiReview).toEqual(aiReview);
+    expect(reviewed.effective?.bpmSource).toBe("aiReview");
+    expect(reviewed.effective?.beatGrid.source).toBe("aiReview");
+    expect(reviewed.effective?.downbeat.source).toBe("aiReview");
+    expect(reviewed.effective?.autoMix.status).toBe("risky");
+    expect(reviewed.effective?.mixInSec.length).toBeGreaterThan(0);
+    expect(reviewed.effective?.mixOutSec.length).toBeGreaterThan(0);
+    expect(reviewed.analysis).toEqual(metadata.analysis);
+  });
+
+  it("fails clearly when AI review references an unknown candidate ID", async () => {
+    const metadata = await createResolvableMetadata();
+    const aiReview = createAiReview(metadata, {
+      selectedTempoCandidateId: "tempo-missing",
+    });
+
+    expect(() => applyAiReview(metadata, aiReview)).toThrow(
+      "Invalid selectedTempoCandidateId",
+    );
+  });
+
+  it("keeps manual overrides ahead of AI review in effective metadata", async () => {
+    const metadata = await createResolvableMetadata();
+    metadata.manualOverrides = {
+      ...metadata.manualOverrides,
+      bpm: 124,
+      firstDownbeatSec: 1.25,
+      mixInSec: [9.5],
+      mixOutSec: [120.5],
+    };
+    const aiReview = createAiReview(metadata, {
+      selectedTempoCandidateId: "tempo-double",
+      status: "approved",
+    });
+
+    const reviewed = applyAiReview(metadata, aiReview);
+
+    expect(reviewed.effective?.bpm).toBe(124);
+    expect(reviewed.effective?.bpmSource).toBe("manual");
+    expect(reviewed.effective?.downbeat.firstDownbeatSec).toBe(1.25);
+    expect(reviewed.effective?.downbeat.source).toBe("manual");
+    expect(reviewed.effective?.mixInSec).toEqual([9.5]);
+    expect(reviewed.effective?.mixOutSec).toEqual([120.5]);
+  });
+
+  it("uses AI review autoMix unless manual override disables auto-mix", async () => {
+    const metadata = await createResolvableMetadata();
+    const rejected = applyAiReview(metadata, createAiReview(metadata, {
+      status: "rejected",
+    }));
+
+    expect(rejected.effective?.autoMix.status).toBe("rejected");
+    expect(rejected.effective?.mixInSec).toEqual([]);
+    expect(rejected.effective?.mixOutSec).toEqual([]);
+
+    metadata.manualOverrides.autoMixDisabled = true;
+    const disabled = applyAiReview(metadata, createAiReview(metadata, {
+      status: "approved",
+    }));
+
+    expect(disabled.effective?.autoMix.status).toBe("rejected");
+    expect(disabled.effective?.autoMix.reasons).toEqual([
+      "Manual override disabled automatic mixing.",
+    ]);
+  });
+});
+
+describe("writeAiReviewedMetadata", () => {
+  it("writes validated metadata with aiReview and effective populated", async () => {
+    const metadata = await createResolvableMetadata();
+    const aiReview = createAiReview(metadata, { status: "approved" });
+    const inputPath = join(tempDir, "track.analysis.json");
+    const aiReviewPath = join(tempDir, "track.ai-review.json");
+    const outPath = join(tempDir, "metadata", "track.ai-reviewed.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(aiReviewPath, JSON.stringify(aiReview), "utf8");
+
+    await writeAiReviewedMetadata({ aiReviewPath, inputPath, outPath });
+
+    const reviewed = await readMetadata(outPath);
+    expect(reviewed.aiReview).toEqual(aiReview);
+    expect(reviewed.effective?.autoMix.status).toBe("approved");
+    expect(reviewed.analysis).toEqual(metadata.analysis);
+  });
+
+  it("refuses existing output without force", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const aiReviewPath = join(tempDir, "track.ai-review.json");
+    const outPath = join(tempDir, "track.ai-reviewed.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(aiReviewPath, JSON.stringify(createAiReview(metadata)), "utf8");
+    await writeFile(outPath, "existing", "utf8");
+
+    await expect(
+      writeAiReviewedMetadata({ aiReviewPath, inputPath, outPath }),
+    ).rejects.toThrow("Output already exists");
+  });
+
+  it("overwrites existing output when force is enabled", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const aiReviewPath = join(tempDir, "track.ai-review.json");
+    const outPath = join(tempDir, "track.ai-reviewed.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(aiReviewPath, JSON.stringify(createAiReview(metadata)), "utf8");
+    await writeFile(outPath, "existing", "utf8");
+
+    await writeAiReviewedMetadata({ aiReviewPath, force: true, inputPath, outPath });
+
+    const reviewed = await readMetadata(outPath);
+    expect(reviewed.aiReview).not.toBeNull();
+    expect(reviewed.effective).not.toBeNull();
+  });
+
+  it("fails clearly for invalid AI review JSON", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const aiReviewPath = join(tempDir, "track.ai-review.json");
+    const outPath = join(tempDir, "track.ai-reviewed.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(aiReviewPath, JSON.stringify({ autoMix: { status: "approved" } }), "utf8");
+
+    await expect(
+      writeAiReviewedMetadata({ aiReviewPath, inputPath, outPath }),
+    ).rejects.toThrow("Invalid AI review file");
+    await expect(stat(outPath)).rejects.toThrow();
+  });
+
+  it("fails clearly when the CLI command is missing --ai-review", () => {
+    expect(() =>
+      parseArgs([
+        "apply-ai-review",
+        "track.analysis.json",
+        "--out",
+        "track.ai-reviewed.json",
+      ]),
+    ).toThrow("Missing required --ai-review");
+  });
+});
+
 describe("writeResolvedMetadata", () => {
   it("resolves effective metadata from analysis defaults without overrides", async () => {
     const metadata = await createResolvableMetadata();
@@ -883,6 +1034,31 @@ async function createResolvableMetadata() {
   };
 
   return metadata;
+}
+
+function createAiReview(
+  metadata: Awaited<ReturnType<typeof createResolvableMetadata>>,
+  overrides: Partial<AiReview> & { status?: AiReview["autoMix"]["status"] } = {},
+): AiReview {
+  const {
+    autoMix,
+    status = "approved",
+    ...selectionOverrides
+  } = overrides;
+
+  return {
+    selectedTempoCandidateId: metadata.analysis.defaults.tempoCandidateId,
+    selectedBeatGridCandidateId: metadata.analysis.defaults.beatGridCandidateId,
+    selectedDownbeatCandidateId: metadata.analysis.defaults.downbeatCandidateId,
+    selectedMixInTransitionId: metadata.analysis.defaults.mixInTransitionId,
+    selectedMixOutTransitionId: metadata.analysis.defaults.mixOutTransitionId,
+    autoMix: autoMix ?? {
+      status,
+      reasons: [`Synthetic AI review marked the track ${status}.`],
+    },
+    notes: ["Synthetic AI review fixture for tests."],
+    ...selectionOverrides,
+  };
 }
 
 function createPulseFeatureSummary(bpm: number, durationSec = 8) {

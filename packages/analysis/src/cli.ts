@@ -4,15 +4,23 @@ import {
   writeResolvedMetadata,
 } from "./effective.js";
 import { writeAiReviewInput } from "./ai-review-input.js";
+import { writeAiReviewedMetadata } from "./ai-review.js";
 import { analyzeFile } from "./index.js";
 import { writeAnalysisReport } from "./report.js";
 import { isAbsolute, resolve } from "node:path";
 
 interface ParsedArgs {
-  command: "ai-input" | "analyze" | "init-overrides" | "report" | "resolve";
+  command:
+    | "ai-input"
+    | "analyze"
+    | "apply-ai-review"
+    | "init-overrides"
+    | "report"
+    | "resolve";
   inputPath: string;
   outPath: string;
   force: boolean;
+  aiReviewPath?: string;
   overridesPath?: string;
 }
 
@@ -46,6 +54,16 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       return;
     }
 
+    if (args.command === "apply-ai-review") {
+      await writeAiReviewedMetadata({
+        inputPath: args.inputPath,
+        aiReviewPath: args.aiReviewPath!,
+        outPath: args.outPath,
+        force: args.force,
+      });
+      return;
+    }
+
     if (args.command === "resolve") {
       await writeResolvedMetadata({
         inputPath: args.inputPath,
@@ -73,6 +91,9 @@ export function resolveCliPaths(args: ParsedArgs): ParsedArgs {
     ...args,
     inputPath: resolveUserPath(args.inputPath),
     outPath: resolveUserPath(args.outPath),
+    aiReviewPath: args.aiReviewPath
+      ? resolveUserPath(args.aiReviewPath)
+      : undefined,
     overridesPath: args.overridesPath
       ? resolveUserPath(args.overridesPath)
       : undefined,
@@ -92,17 +113,19 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (
     command !== "ai-input" &&
     command !== "analyze" &&
+    command !== "apply-ai-review" &&
     command !== "init-overrides" &&
     command !== "report" &&
     command !== "resolve"
   ) {
     throw new Error(
-      "Expected command: analyze, report, ai-input, resolve, or init-overrides",
+      "Expected command: analyze, report, ai-input, apply-ai-review, resolve, or init-overrides",
     );
   }
 
   let inputPath: string | undefined;
   let outPath: string | undefined;
+  let aiReviewPath: string | undefined;
   let overridesPath: string | undefined;
   let force = false;
 
@@ -114,6 +137,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
       index += 1;
       if (!outPath) {
         throw new Error("Missing value for --out");
+      }
+      continue;
+    }
+
+    if (arg === "--ai-review") {
+      aiReviewPath = rest[index + 1];
+      index += 1;
+      if (!aiReviewPath) {
+        throw new Error("Missing value for --ai-review");
       }
       continue;
     }
@@ -150,11 +182,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
     throw new Error("Missing required --out <path>");
   }
 
+  if (command === "apply-ai-review" && !aiReviewPath) {
+    throw new Error("Missing required --ai-review <path>");
+  }
+
   return {
     command,
     inputPath,
     outPath,
     force,
+    aiReviewPath,
     overridesPath,
   };
 }

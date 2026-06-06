@@ -73,6 +73,29 @@ It includes source summary fields, risk signals, candidate IDs, defaults, struct
 
 An AI reviewer should choose existing candidate IDs and classify auto-mix safety as `approved`, `risky`, or `rejected`. It should not invent unsupported candidate IDs. A later step may turn that review into the schema-bound `aiReview` layer.
 
+## AI Review Files
+
+The analysis CLI can apply a supplied `AiReview` JSON file to analysis metadata. The file contains only the `aiReview` object, not a full metadata document.
+
+Minimal shape:
+
+```json
+{
+  "selectedTempoCandidateId": "tempo-primary",
+  "selectedBeatGridCandidateId": "beat-grid-primary",
+  "selectedDownbeatCandidateId": "downbeat-phase-0",
+  "selectedMixInTransitionId": "transition-mix-in-first-downbeat",
+  "selectedMixOutTransitionId": "transition-mix-out-outro-start",
+  "autoMix": {
+    "status": "risky",
+    "reasons": ["Candidate choices need manual listening confirmation."]
+  },
+  "notes": ["Review selected existing candidate IDs."]
+}
+```
+
+When applied, every selected candidate ID is validated against the generated `analysis` candidates. The output keeps generated `analysis` unchanged, stores the supplied `aiReview`, preserves `manualOverrides`, and writes resolved `effective` metadata.
+
 ## Manual Override Files
 
 The analysis CLI can resolve effective metadata from an analysis file plus an optional manual override file. The override file contains only the `manualOverrides` object, not a full metadata document.

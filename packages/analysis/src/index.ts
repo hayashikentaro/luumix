@@ -31,6 +31,11 @@ import {
 import { estimateTempoCandidates } from "./tempo.js";
 
 export {
+  applyAiReview,
+  writeAiReviewedMetadata,
+} from "./ai-review.js";
+export type { ApplyAiReviewOptions } from "./ai-review.js";
+export {
   createAiReviewInput,
   writeAiReviewInput,
 } from "./ai-review-input.js";
