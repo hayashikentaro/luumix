@@ -17,6 +17,7 @@
   "scripts": {
     "analyze": "node ./dist/src/cli.js analyze",
     "build": "tsc -p tsconfig.json",
+    "report": "node ./dist/src/cli.js report",
     "test": "vitest run test/cli.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

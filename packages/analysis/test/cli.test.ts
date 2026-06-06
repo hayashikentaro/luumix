@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { EventEmitter } from "node:events";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -16,6 +17,10 @@ import {
   parseFfprobeOutput,
   type AudioProbeResult,
 } from "../src/probe.js";
+import {
+  generateAnalysisReportHtml,
+  writeAnalysisReport,
+} from "../src/report.js";
 
 let tempDir: string;
 
@@ -195,6 +200,79 @@ describe("analyzeFile", () => {
   });
 });
 
+describe("generateAnalysisReportHtml", () => {
+  it("includes source summary and escaped metadata fields", async () => {
+    const metadata = await createTestMetadata();
+    metadata.sourceFile.path = "synthetic/<track>.wav";
+
+    const html = generateAnalysisReportHtml(metadata);
+
+    expect(html).toContain("Luumix Analysis Report");
+    expect(html).toContain("synthetic/&lt;track&gt;.wav");
+    expect(html).toContain("sha256:");
+    expect(html).toContain("12.345 sec");
+    expect(html).toContain("48000 Hz");
+    expect(html).toContain("pcm_s16le");
+  });
+
+  it("includes an SVG envelope when featureSummary exists", async () => {
+    const metadata = await createTestMetadata();
+
+    const html = generateAnalysisReportHtml(metadata);
+
+    expect(html).toContain("<svg");
+    expect(html).toContain('data-overlay-layer="future-beat-downbeat-ticks"');
+    expect(html).toContain("Peak envelope");
+    expect(html).toContain("RMS envelope");
+  });
+
+  it("handles empty candidate arrays", async () => {
+    const metadata = await createTestMetadata();
+
+    const html = generateAnalysisReportHtml(metadata);
+
+    expect(html).toContain("No tempo candidates are available yet.");
+    expect(html).toContain("No beat grid candidates are available yet.");
+    expect(html).toContain("No downbeat candidates are available yet.");
+  });
+});
+
+describe("writeAnalysisReport", () => {
+  it("validates input metadata before writing report", async () => {
+    const inputPath = join(tempDir, "invalid.analysis.json");
+    const outPath = join(tempDir, "report.html");
+    await writeFile(inputPath, JSON.stringify({ schemaVersion: 1 }), "utf8");
+
+    await expect(writeAnalysisReport({ inputPath, outPath })).rejects.toThrow();
+    await expect(stat(outPath)).rejects.toThrow();
+  });
+
+  it("refuses existing output without force", async () => {
+    const metadata = await createTestMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "report.html");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(outPath, "existing", "utf8");
+
+    await expect(writeAnalysisReport({ inputPath, outPath })).rejects.toThrow(
+      "Output already exists",
+    );
+  });
+
+  it("writes a standalone HTML report and creates output directories", async () => {
+    const metadata = await createTestMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "reports", "track.html");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+
+    await writeAnalysisReport({ inputPath, outPath });
+
+    const html = await readFile(outPath, "utf8");
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain("Luumix Analysis Report");
+  });
+});
+
 describe("computeFeatureSummary", () => {
   it("computes peak and RMS envelopes for fixed frames", () => {
     const summary = computeFeatureSummary([0, 1, -1, 0, 0.5, -0.5], {
@@ -240,6 +318,18 @@ describe("computeFeatureSummary", () => {
     expect(summary.rmsEnvelope).toHaveLength(3);
   });
 });
+
+async function createTestMetadata() {
+  const inputPath = join(tempDir, "track.wav");
+  const outPath = join(tempDir, `${randomUUID()}.analysis.json`);
+  await writeFile(inputPath, "placeholder audio bytes", "utf8");
+  return analyzeFile({
+    extractFeatures: async () => featureSummary,
+    inputPath,
+    outPath,
+    probeAudio: async () => probeResult,
+  });
+}
 
 describe("createFfmpegFeatureExtractor", () => {
   it("reports missing ffmpeg with an actionable error", async () => {

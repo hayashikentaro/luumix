@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { analyzeFile } from "./index.js";
+import { writeAnalysisReport } from "./report.js";
+import { isAbsolute, resolve } from "node:path";
 
 interface ParsedArgs {
-  command: "analyze";
+  command: "analyze" | "report";
   inputPath: string;
   outPath: string;
   force: boolean;
@@ -10,8 +12,17 @@ interface ParsedArgs {
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   try {
-    const args = parseArgs(argv);
-    await analyzeFile({
+    const args = resolveCliPaths(parseArgs(argv));
+    if (args.command === "analyze") {
+      await analyzeFile({
+        inputPath: args.inputPath,
+        outPath: args.outPath,
+        force: args.force,
+      });
+      return;
+    }
+
+    await writeAnalysisReport({
       inputPath: args.inputPath,
       outPath: args.outPath,
       force: args.force,
@@ -23,10 +34,26 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   }
 }
 
+export function resolveCliPaths(args: ParsedArgs): ParsedArgs {
+  return {
+    ...args,
+    inputPath: resolveUserPath(args.inputPath),
+    outPath: resolveUserPath(args.outPath),
+  };
+}
+
+function resolveUserPath(path: string): string {
+  if (isAbsolute(path)) {
+    return path;
+  }
+
+  return resolve(process.env.INIT_CWD ?? process.cwd(), path);
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const [command, ...rest] = argv;
-  if (command !== "analyze") {
-    throw new Error("Expected command: analyze");
+  if (command !== "analyze" && command !== "report") {
+    throw new Error("Expected command: analyze or report");
   }
 
   let inputPath: string | undefined;
