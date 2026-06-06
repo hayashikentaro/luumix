@@ -99,6 +99,12 @@ docs/schemas/metadata-v1.md
 fixtures/metadata/
 ```
 
+For testing the current analysis/report workflow on private local audio, see:
+
+```text
+docs/guides/analyze-local-audio.md
+```
+
 ### v0: Import and metadata
 
 - Import local audio files.
