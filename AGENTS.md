@@ -85,6 +85,14 @@ docs/product-principles.md  Product boundaries, non-goals, and UX principles
 
 Do not create a large documentation tree just for aesthetics. Add a document when it answers a real design, implementation, or handoff need.
 
+## Issues And Repository Docs
+
+GitHub Issues are the source of truth for actionable work, open/closed state, task status, and backlog once issue tracking is being used for this repository.
+
+Repository-local docs should not become a parallel issue tracker or task status system. Use them for durable design decisions, architectural notes, product context, setup/API references, metadata schemas, and implementation tradeoffs that should live close to the code.
+
+If `docs/issues/` is referenced, treat it as historical or decision-record-like context, not as a general backlog. Do not add task status bookkeeping there when a GitHub Issue is the appropriate source of truth.
+
 ## Domain Concepts
 
 - Track: a source audio file imported into the Luumix library.
@@ -217,11 +225,13 @@ When changing metadata shapes:
 - Prefer existing project conventions over introducing new structure.
 - Avoid broad refactors unless they are required for the task.
 - Add or update tests when changing behavior once a test setup exists.
-- Document important setup, API, metadata, or workflow changes in the repository rather than only in chat.
+- Document important setup, API, config, metadata, playback semantics, persisted state, or user-facing workflow changes in the repository rather than only in chat.
+- Documentation updates are usually not required for CSS-only visual tuning, spacing, focus rings, animation timing/easing, or small local affordance adjustments unless the change alters user-facing workflow or durable design guidance.
 - Do not silently change public names, file layout, metadata shapes, playback semantics, or product boundaries.
 - When removing a feature or UI path, remove or clearly deprecate related code, config fields, types, docs, and examples so dead code is not mistaken for supported behavior.
-- When changing metadata schemas or response shapes, update docs, examples, and consumer types together.
-- Use `docs/issues/` for deferred product decisions, domain-model questions, and implementation tradeoffs that should stay close to the codebase. Treat these files as decision records rather than a general TODO backlog.
+- When changing public setup, metadata schemas, API routes, response shapes, config behavior, user-facing workflow, playback semantics, or persisted state, update the relevant README/docs, examples, and consumer types together.
+- Use GitHub Issues for actionable follow-up work and backlog items once issue tracking is active.
+- Use repo-local docs for durable context and decisions. Treat `docs/issues/` as historical or decision-record-like context, not as the current backlog.
 - Keep responsibility-specific implementation guidance in dedicated files under `docs/guides/`, not directly in this top-level router. When introducing or changing a recurring area-specific rule, create or update the relevant guide and link it from this file.
 
 ## Change Authorization Boundary
@@ -272,7 +282,9 @@ When finished:
 
 Agents working in this repository should read and follow this `AGENTS.md` before making changes.
 
-Task-specific prompts should focus on the requested change, relevant context, non-goals, acceptance criteria, and task-specific verification. Repository-wide workflow rules are defined in this file.
+Task-specific prompts should focus on the goal, allowed files, current context, required behavior, non-goals, acceptance/manual QA, and task-specific verification.
+
+Repository-wide workflow, commit/push behavior, and standard reporting live in this file and do not need to be repeated in every prompt. Repeating key constraints is still fine for risky or high-blast-radius tasks.
 
 If a task-specific user instruction conflicts with this file, stop and report the conflict unless the user's instruction clearly and safely overrides a non-safety process preference.
 
@@ -310,6 +322,8 @@ Do not delete untracked files unless the task explicitly asks for cleanup and th
 
 If unexpected untracked files exist, report them rather than modifying them.
 
+Always use the current `git status --short --branch` output to identify unexpected untracked files. Do not modify or delete them unless explicitly requested.
+
 ## Commit and Push Rule
 
 Whenever repository files are modified, commit the relevant changes and push them to the current branch.
@@ -338,6 +352,8 @@ npm run build
 npm run test
 npm run typecheck
 ```
+
+For documentation-only changes, `git diff --check` is required and build/typecheck commands are useful when quick. Code-specific checks are optional unless related code changed.
 
 If a check cannot be run because of sandbox, permissions, missing dependencies, or missing local services, report that clearly.
 
