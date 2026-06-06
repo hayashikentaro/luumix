@@ -57,7 +57,9 @@ The first low-level feature summary is compact and bounded. `featureSummary` may
 
 Feature arrays are derived at import time from decoded mono PCM and are not raw audio. They are intended for future visual reports and candidate generation, not as beat or downbeat detections.
 
-The first tempo candidates are heuristic estimates derived from the low-level feature summary. They are stored as multiple hypotheses, including half/double alternatives when available, and should not be treated as beat tracking. Beat grid, downbeat, phrase, and playback analysis are still intentionally not implemented.
+The first tempo candidates are heuristic estimates derived from the low-level feature summary. They are stored as multiple hypotheses, including half/double alternatives when available.
+
+The first beat grid candidates are heuristic phase alignments from the selected tempo candidate and feature summary. They are intended for visual inspection and future correction, not as final playback-safe timing. Downbeat, phrase, transition scoring, and playback analysis are still intentionally not implemented.
 
 ## Fixtures
 

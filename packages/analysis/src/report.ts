@@ -59,6 +59,7 @@ export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): str
       --ink: #16202a;
       --muted: #5f6b77;
       --panel: #f7f9fb;
+      --beat: #1a7f37;
       --rms: #1f6feb;
       --peak: #d1242f;
     }
@@ -148,6 +149,7 @@ export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): str
       margin-right: 6px;
       width: 18px;
     }
+    .swatch.beat { background: var(--beat); }
     .swatch.peak { background: var(--peak); }
     .swatch.rms { background: var(--rms); }
   </style>
@@ -230,32 +232,79 @@ function renderFeatureSummary(metadata: TrackAnalysisMetadata): string {
       ["Frames", String(frameCount)],
       ["Silence ranges", silenceRanges],
     ])}
-    ${renderEnvelopeSvg(summary.peakEnvelope ?? [], summary.rmsEnvelope ?? [])}
+    ${renderEnvelopeSvg({
+      beatGrid: getDefaultBeatGridCandidate(metadata),
+      durationSec: metadata.sourceFile.durationSec,
+      peakEnvelope: summary.peakEnvelope ?? [],
+      rmsEnvelope: summary.rmsEnvelope ?? [],
+    })}
     <div class="legend">
       <span><span class="swatch peak"></span>Peak envelope</span>
       <span><span class="swatch rms"></span>RMS envelope</span>
+      <span><span class="swatch beat"></span>Beat ticks</span>
     </div>
   </div>`;
 }
 
-function renderEnvelopeSvg(peakEnvelope: number[], rmsEnvelope: number[]): string {
-  if (peakEnvelope.length === 0 && rmsEnvelope.length === 0) {
+function renderEnvelopeSvg(input: {
+  beatGrid?: BeatGridCandidate;
+  durationSec: number;
+  peakEnvelope: number[];
+  rmsEnvelope: number[];
+}): string {
+  if (input.peakEnvelope.length === 0 && input.rmsEnvelope.length === 0) {
     return `<p class="empty">No envelope data is available.</p>`;
   }
 
   const width = 1000;
   const height = 220;
   const centerY = height / 2;
-  const peakPath = buildEnvelopePath(peakEnvelope, width, height);
-  const rmsPath = buildEnvelopePath(rmsEnvelope, width, height);
+  const peakPath = buildEnvelopePath(input.peakEnvelope, width, height);
+  const rmsPath = buildEnvelopePath(input.rmsEnvelope, width, height);
+  const beatTicks = renderBeatTicks({
+    beatGrid: input.beatGrid,
+    durationSec: input.durationSec,
+    height,
+    width,
+  });
 
   return `<svg class="envelope" viewBox="0 0 ${width} ${height}" role="img" aria-label="Feature envelope">
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
     <line x1="0" y1="${centerY}" x2="${width}" y2="${centerY}" stroke="#d7dce2"></line>
-    <g data-overlay-layer="future-beat-downbeat-ticks"></g>
+    <g data-overlay-layer="beat-ticks">${beatTicks}</g>
+    <g data-overlay-layer="future-downbeat-ticks"></g>
     ${peakPath ? `<path d="${peakPath}" fill="none" stroke="var(--peak)" stroke-width="2"></path>` : ""}
     ${rmsPath ? `<path d="${rmsPath}" fill="none" stroke="var(--rms)" stroke-width="2"></path>` : ""}
   </svg>`;
+}
+
+function getDefaultBeatGridCandidate(
+  metadata: TrackAnalysisMetadata,
+): BeatGridCandidate | undefined {
+  const defaultId = metadata.analysis.defaults.beatGridCandidateId;
+  return (
+    metadata.analysis.beatGridCandidates.find((candidate) => candidate.id === defaultId) ??
+    metadata.analysis.beatGridCandidates[0]
+  );
+}
+
+function renderBeatTicks(input: {
+  beatGrid?: BeatGridCandidate;
+  durationSec: number;
+  height: number;
+  width: number;
+}): string {
+  if (!input.beatGrid || input.durationSec <= 0) {
+    return "";
+  }
+
+  return input.beatGrid.beatsSec
+    .filter((beatSec) => beatSec >= 0 && beatSec <= input.durationSec)
+    .map((beatSec) => {
+      const x = Number(((beatSec / input.durationSec) * input.width).toFixed(3));
+      return `<line x1="${x}" y1="0" x2="${x}" y2="${input.height}" stroke="var(--beat)" stroke-width="1" opacity="0.35"></line>`;
+    })
+    .join("");
 }
 
 function buildEnvelopePath(values: number[], width: number, height: number): string {

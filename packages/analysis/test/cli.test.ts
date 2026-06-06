@@ -21,6 +21,7 @@ import {
   generateAnalysisReportHtml,
   writeAnalysisReport,
 } from "../src/report.js";
+import { estimateBeatGridCandidates } from "../src/beat-grid.js";
 import { estimateTempoCandidates } from "../src/tempo.js";
 
 let tempDir: string;
@@ -77,6 +78,55 @@ describe("estimateTempoCandidates", () => {
     const candidates = estimateTempoCandidates({
       frameHopSec: 0.1,
       rmsEnvelope: new Array(40).fill(0),
+    });
+
+    expect(candidates).toEqual([]);
+  });
+});
+
+describe("estimateBeatGridCandidates", () => {
+  it("generates a plausible beat grid candidate from a 120 BPM pulse train", () => {
+    const featureSummary = createPulseFeatureSummary(120);
+    const tempoCandidates = estimateTempoCandidates(featureSummary);
+    const candidates = estimateBeatGridCandidates({
+      durationSec: 12,
+      featureSummary,
+      tempoCandidates,
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.id).toBe("beat-grid-primary");
+    expect(candidates[0]?.tempoCandidateId).toBe("tempo-primary");
+    expect(candidates[0]?.firstBeatSec).toBeCloseTo(0.5, 3);
+    expect(candidates[0]?.beatsSec.length).toBeGreaterThan(20);
+    expect(candidates[0]?.confidence).toBeGreaterThan(0.45);
+  });
+
+  it("returns no candidates without tempo candidates", () => {
+    const candidates = estimateBeatGridCandidates({
+      durationSec: 12,
+      featureSummary: createPulseFeatureSummary(120),
+      tempoCandidates: [],
+    });
+
+    expect(candidates).toEqual([]);
+  });
+
+  it("returns no candidates for flat input and does not crash", () => {
+    const candidates = estimateBeatGridCandidates({
+      durationSec: 12,
+      featureSummary: {
+        frameHopSec: 0.1,
+        rmsEnvelope: new Array(40).fill(0),
+      },
+      tempoCandidates: [
+        {
+          id: "tempo-primary",
+          bpm: 120,
+          confidence: 0.5,
+          source: "heuristic",
+        },
+      ],
     });
 
     expect(candidates).toEqual([]);
@@ -184,7 +234,8 @@ describe("analyzeFile", () => {
     expect(metadata.analysis.tempoCandidates).toHaveLength(3);
     expect(metadata.analysis.tempoCandidates[0]?.bpm).toBeCloseTo(120, 3);
     expect(metadata.analysis.defaults.tempoCandidateId).toBe("tempo-primary");
-    expect(metadata.analysis.beatGridCandidates).toEqual([]);
+    expect(metadata.analysis.beatGridCandidates).toHaveLength(1);
+    expect(metadata.analysis.defaults.beatGridCandidateId).toBe("beat-grid-primary");
     expect(metadata.analysis.downbeatCandidates).toEqual([]);
     expect(metadata.analysis.defaults.autoMix?.status).toBe("rejected");
     expect(metadata.analysis.riskSignals.doubleTempoAmbiguous).toBe(true);
@@ -278,9 +329,20 @@ describe("generateAnalysisReportHtml", () => {
     const html = generateAnalysisReportHtml(metadata);
 
     expect(html).toContain("<svg");
-    expect(html).toContain('data-overlay-layer="future-beat-downbeat-ticks"');
+    expect(html).toContain('data-overlay-layer="beat-ticks"');
+    expect(html).toContain('data-overlay-layer="future-downbeat-ticks"');
     expect(html).toContain("Peak envelope");
     expect(html).toContain("RMS envelope");
+  });
+
+  it("includes beat tick overlays when beat grid candidates exist", async () => {
+    const metadata = await createTestMetadata(createPulseFeatureSummary(120));
+
+    const html = generateAnalysisReportHtml(metadata);
+
+    expect(html).toContain('data-overlay-layer="beat-ticks"');
+    expect(html).toContain('stroke="var(--beat)"');
+    expect(html).toContain("Beat ticks");
   });
 
   it("handles empty candidate arrays", async () => {
@@ -376,12 +438,12 @@ describe("computeFeatureSummary", () => {
   });
 });
 
-async function createTestMetadata() {
+async function createTestMetadata(summary = featureSummary) {
   const inputPath = join(tempDir, "track.wav");
   const outPath = join(tempDir, `${randomUUID()}.analysis.json`);
   await writeFile(inputPath, "placeholder audio bytes", "utf8");
   return analyzeFile({
-    extractFeatures: async () => featureSummary,
+    extractFeatures: async () => summary,
     inputPath,
     outPath,
     probeAudio: async () => probeResult,

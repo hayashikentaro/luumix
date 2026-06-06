@@ -2,6 +2,7 @@ import {
   METADATA_SCHEMA_VERSION,
   parseTrackAnalysisMetadata,
   type FeatureSummary,
+  type BeatGridCandidate,
   type TempoCandidate,
   type TrackAnalysisMetadata,
 } from "@luumix/metadata";
@@ -17,8 +18,11 @@ import {
   type AudioProbe,
   type AudioProbeResult,
 } from "./probe.js";
+import { estimateBeatGridCandidates } from "./beat-grid.js";
 import { estimateTempoCandidates } from "./tempo.js";
 
+export { estimateBeatGridCandidates } from "./beat-grid.js";
+export type { BeatGridEstimationInput } from "./beat-grid.js";
 export { estimateTempoCandidates } from "./tempo.js";
 export type { TempoEstimationOptions } from "./tempo.js";
 
@@ -79,6 +83,14 @@ export function createPlaceholderMetadata(input: {
   const primaryTempoCandidate = tempoCandidates.find(
     (candidate) => candidate.id === "tempo-primary",
   );
+  const beatGridCandidates = estimateBeatGridCandidates({
+    durationSec: input.audioProbe.durationSec,
+    featureSummary: input.featureSummary,
+    tempoCandidates,
+  });
+  const primaryBeatGridCandidate = beatGridCandidates.find(
+    (candidate) => candidate.id === "beat-grid-primary",
+  );
 
   return {
     schemaVersion: METADATA_SCHEMA_VERSION,
@@ -95,7 +107,7 @@ export function createPlaceholderMetadata(input: {
     analysis: {
       featureSummary: input.featureSummary,
       tempoCandidates,
-      beatGridCandidates: [],
+      beatGridCandidates,
       downbeatCandidates: [],
       structureCandidates: [],
       transitionCandidates: {
@@ -107,15 +119,18 @@ export function createPlaceholderMetadata(input: {
         tempoUnstable: isTempoUnstable(tempoCandidates),
         downbeatAmbiguous: true,
         doubleTempoAmbiguous: hasDerivedTempoAlternatives(tempoCandidates),
-        lowConfidence: isLowConfidenceTempo(tempoCandidates),
-        notes: buildRiskNotes(tempoCandidates),
+        lowConfidence: isLowConfidenceAnalysis(tempoCandidates, beatGridCandidates),
+        notes: buildRiskNotes(tempoCandidates, beatGridCandidates),
       },
       defaults: {
         ...(primaryTempoCandidate ? { tempoCandidateId: primaryTempoCandidate.id } : {}),
+        ...(primaryBeatGridCandidate
+          ? { beatGridCandidateId: primaryBeatGridCandidate.id }
+          : {}),
         autoMix: {
           status: "rejected",
           reasons: [
-            "Beat grid and downbeat analysis are not implemented, so this track is not safe for automatic mixing.",
+            "Downbeat and bar-phase analysis are not implemented, so this track is not safe for automatic mixing.",
           ],
         },
       },
@@ -144,6 +159,21 @@ function isLowConfidenceTempo(tempoCandidates: TempoCandidate[]): boolean {
   return !primary || primary.confidence < 0.5;
 }
 
+function isLowConfidenceAnalysis(
+  tempoCandidates: TempoCandidate[],
+  beatGridCandidates: BeatGridCandidate[],
+): boolean {
+  const primaryBeatGrid = beatGridCandidates.find(
+    (candidate) => candidate.id === "beat-grid-primary",
+  );
+
+  return (
+    isLowConfidenceTempo(tempoCandidates) ||
+    !primaryBeatGrid ||
+    primaryBeatGrid.confidence < 0.5
+  );
+}
+
 function hasDerivedTempoAlternatives(tempoCandidates: TempoCandidate[]): boolean {
   return tempoCandidates.some(
     (candidate) =>
@@ -151,16 +181,28 @@ function hasDerivedTempoAlternatives(tempoCandidates: TempoCandidate[]): boolean
   );
 }
 
-function buildRiskNotes(tempoCandidates: TempoCandidate[]): string[] {
+function buildRiskNotes(
+  tempoCandidates: TempoCandidate[],
+  beatGridCandidates: BeatGridCandidate[],
+): string[] {
   if (tempoCandidates.length === 0) {
     return [
       "Tempo estimation did not find a plausible candidate from the low-level feature summary.",
-      "Beat grid and downbeat analysis are not implemented.",
+      "Beat grid and downbeat analysis were not attempted without a tempo candidate.",
+    ];
+  }
+
+  if (beatGridCandidates.length === 0) {
+    return [
+      "Tempo candidates are heuristic estimates from low-level feature summaries.",
+      "Beat grid estimation did not find a plausible phase alignment.",
+      "Downbeat analysis is not implemented.",
     ];
   }
 
   return [
     "Tempo candidates are heuristic estimates from low-level feature summaries.",
-    "Beat grid and downbeat analysis are not implemented.",
+    "Beat grid candidates are heuristic phase alignments against low-level feature summaries.",
+    "Downbeat analysis is not implemented.",
   ];
 }
