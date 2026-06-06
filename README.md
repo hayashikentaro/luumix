@@ -23,6 +23,22 @@ The goal is not club performance, surprise, or expressive human DJing. The goal 
 - Keep automatic decisions explainable and correctable.
 - Cache manual corrections so a track only needs to be fixed once.
 
+## Main Plan
+
+The canonical implementation plan is:
+
+```text
+docs/implementation-plan.md
+```
+
+Luumix should be built analysis-first. The first success condition is not full playback. It is producing track metadata that can be visually inspected and judged correct or fixable.
+
+The analysis-first decision record is:
+
+```text
+docs/issues/0001-analysis-first-plan.md
+```
+
 ## Non-Goals
 
 - Not a generic music player.
@@ -60,6 +76,8 @@ The project should separate these layers:
 This keeps automatic analysis useful while accepting that beat/downbeat detection will sometimes be wrong.
 
 ## Suggested Milestones
+
+See `docs/implementation-plan.md` for the canonical project phases.
 
 ### v0: Import and metadata
 
