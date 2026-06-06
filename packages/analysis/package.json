@@ -15,6 +15,7 @@
     }
   },
   "scripts": {
+    "ai-input": "node ./dist/src/cli.js ai-input",
     "analyze": "node ./dist/src/cli.js analyze",
     "build": "tsc -p tsconfig.json",
     "init-overrides": "node ./dist/src/cli.js init-overrides",

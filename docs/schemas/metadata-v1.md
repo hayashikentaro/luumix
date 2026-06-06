@@ -65,6 +65,14 @@ The first downbeat candidates are four explicit 4/4 phase hypotheses generated f
 
 The first structure and transition candidates are conservative bar-aligned hints generated from the selected downbeat grid. They can mark possible first usable downbeats, intro ends, section changes, outro starts, mix-in points, and mix-out points for inspection. They are not full song-section recognition and are not treated as DJ-safe transitions without later review.
 
+## AI Review Input
+
+The analysis CLI can generate a compact `analysis-for-ai` JSON file from a full `TrackAnalysisMetadata` document. This file is prompt input for future AI review, not a separate persisted metadata layer.
+
+It includes source summary fields, risk signals, candidate IDs, defaults, structure candidates, transition candidates, and sampled beat/downbeat timings. It intentionally excludes raw audio, full feature envelopes, full beat arrays, and full downbeat arrays.
+
+An AI reviewer should choose existing candidate IDs and classify auto-mix safety as `approved`, `risky`, or `rejected`. It should not invent unsupported candidate IDs. A later step may turn that review into the schema-bound `aiReview` layer.
+
 ## Manual Override Files
 
 The analysis CLI can resolve effective metadata from an analysis file plus an optional manual override file. The override file contains only the `manualOverrides` object, not a full metadata document.

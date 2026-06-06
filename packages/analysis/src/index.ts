@@ -31,6 +31,16 @@ import {
 import { estimateTempoCandidates } from "./tempo.js";
 
 export {
+  createAiReviewInput,
+  writeAiReviewInput,
+} from "./ai-review-input.js";
+export type {
+  AiReviewInput,
+  AiReviewInputOptions,
+  BeatGridCandidateSummary,
+  DownbeatCandidateSummary,
+} from "./ai-review-input.js";
+export {
   writeOverrideTemplate,
   writeResolvedMetadata,
 } from "./effective.js";

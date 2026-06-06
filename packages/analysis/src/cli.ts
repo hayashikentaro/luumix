@@ -3,12 +3,13 @@ import {
   writeOverrideTemplate,
   writeResolvedMetadata,
 } from "./effective.js";
+import { writeAiReviewInput } from "./ai-review-input.js";
 import { analyzeFile } from "./index.js";
 import { writeAnalysisReport } from "./report.js";
 import { isAbsolute, resolve } from "node:path";
 
 interface ParsedArgs {
-  command: "analyze" | "init-overrides" | "report" | "resolve";
+  command: "ai-input" | "analyze" | "init-overrides" | "report" | "resolve";
   inputPath: string;
   outPath: string;
   force: boolean;
@@ -29,6 +30,15 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 
     if (args.command === "report") {
       await writeAnalysisReport({
+        inputPath: args.inputPath,
+        outPath: args.outPath,
+        force: args.force,
+      });
+      return;
+    }
+
+    if (args.command === "ai-input") {
+      await writeAiReviewInput({
         inputPath: args.inputPath,
         outPath: args.outPath,
         force: args.force,
@@ -80,12 +90,15 @@ function resolveUserPath(path: string): string {
 export function parseArgs(argv: string[]): ParsedArgs {
   const [command, ...rest] = argv;
   if (
+    command !== "ai-input" &&
     command !== "analyze" &&
     command !== "init-overrides" &&
     command !== "report" &&
     command !== "resolve"
   ) {
-    throw new Error("Expected command: analyze, report, resolve, or init-overrides");
+    throw new Error(
+      "Expected command: analyze, report, ai-input, resolve, or init-overrides",
+    );
   }
 
   let inputPath: string | undefined;

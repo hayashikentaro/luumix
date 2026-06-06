@@ -66,6 +66,20 @@ npm run report -- .luumix/metadata/track.analysis.json --out .luumix/reports/tra
 
 Open `.luumix/reports/track.html` in a browser. It does not require a server.
 
+## Generate AI Review Input
+
+Optionally create a compact JSON summary for AI-assisted review:
+
+```bash
+npm run ai-input -- .luumix/metadata/track.analysis.json --out .luumix/metadata/track.analysis-for-ai.json
+```
+
+This command does not call an AI API. It prepares structured candidate data that can be pasted into an AI session or sent to a future review step.
+
+The generated file excludes raw audio and full feature envelopes, but it may still include source metadata, candidate IDs, timing samples, and risk notes. Paste or share only metadata you are comfortable sharing. Do not commit private `analysis-for-ai` files unless that is intentional.
+
+When using the generated input with AI, ask it to choose from the provided candidate IDs. It should not invent new tempo, beat grid, downbeat, mix-in, or mix-out IDs.
+
 ## Apply Manual Overrides
 
 After inspecting the report, create an override template:

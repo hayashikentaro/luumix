@@ -13,6 +13,8 @@ import {
 } from "../src/features.js";
 import {
   analyzeFile,
+  createAiReviewInput,
+  writeAiReviewInput,
   writeOverrideTemplate,
   writeResolvedMetadata,
 } from "../src/index.js";
@@ -549,6 +551,129 @@ describe("writeAnalysisReport", () => {
     const html = await readFile(outPath, "utf8");
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("Luumix Analysis Report");
+  });
+});
+
+describe("createAiReviewInput", () => {
+  it("includes candidate IDs, defaults, reviewer tasks, and constraints", async () => {
+    const metadata = await createResolvableMetadata();
+
+    const input = createAiReviewInput(metadata);
+
+    expect(input.promptInputVersion).toBe(1);
+    expect(input.source.durationSec).toBe(180);
+    expect(input.tempoCandidates.map((candidate) => candidate.id)).toContain(
+      "tempo-primary",
+    );
+    expect(input.beatGridCandidates.map((candidate) => candidate.id)).toContain(
+      "beat-grid-primary",
+    );
+    expect(input.downbeatCandidates.map((candidate) => candidate.id)).toContain(
+      metadata.analysis.defaults.downbeatCandidateId,
+    );
+    expect(input.defaults).toEqual(metadata.analysis.defaults);
+    expect(input.reviewerTask.select).toContain("selectedTempoCandidateId");
+    expect(input.reviewerTask.classifyAutoMixStatusAs).toEqual([
+      "approved",
+      "risky",
+      "rejected",
+    ]);
+    expect(input.constraints.join(" ")).toContain("Do not invent candidate IDs");
+  });
+
+  it("truncates large beat and downbeat arrays to timing samples", async () => {
+    const metadata = await createResolvableMetadata();
+
+    const input = createAiReviewInput(metadata);
+    const beatGrid = input.beatGridCandidates[0];
+    const downbeat = input.downbeatCandidates[0];
+
+    expect(beatGrid?.beatCount).toBe(
+      metadata.analysis.beatGridCandidates[0]?.beatsSec.length,
+    );
+    expect(beatGrid?.firstBeatsSec.length).toBeLessThan(beatGrid?.beatCount ?? 0);
+    expect(beatGrid?.firstBeatsSec).toEqual(
+      metadata.analysis.beatGridCandidates[0]?.beatsSec.slice(0, 12),
+    );
+    expect(downbeat?.downbeatCount).toBe(
+      metadata.analysis.downbeatCandidates[0]?.downbeatsSec.length,
+    );
+    expect(downbeat?.firstDownbeatsSec.length).toBeLessThan(
+      downbeat?.downbeatCount ?? 0,
+    );
+    expect(downbeat?.firstDownbeatsSec).toEqual(
+      metadata.analysis.downbeatCandidates[0]?.downbeatsSec.slice(0, 12),
+    );
+  });
+
+  it("does not include full feature envelope or timing arrays", async () => {
+    const metadata = await createResolvableMetadata();
+
+    const serialized = JSON.stringify(createAiReviewInput(metadata));
+
+    expect(serialized).not.toContain("featureSummary");
+    expect(serialized).not.toContain("peakEnvelope");
+    expect(serialized).not.toContain("rmsEnvelope");
+    expect(serialized).not.toContain('"beatsSec":');
+    expect(serialized).not.toContain('"downbeatsSec":');
+  });
+});
+
+describe("writeAiReviewInput", () => {
+  it("writes compact AI review input and creates output directories", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "metadata", "track.analysis-for-ai.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+
+    await writeAiReviewInput({ inputPath, outPath });
+
+    const output = JSON.parse(await readFile(outPath, "utf8")) as {
+      promptInputVersion?: number;
+      tempoCandidates?: Array<{ id: string }>;
+      featureSummary?: unknown;
+    };
+    expect(output.promptInputVersion).toBe(1);
+    expect(output.tempoCandidates?.map((candidate) => candidate.id)).toContain(
+      "tempo-primary",
+    );
+    expect(output.featureSummary).toBeUndefined();
+  });
+
+  it("refuses existing output without force", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "track.analysis-for-ai.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(outPath, "existing", "utf8");
+
+    await expect(writeAiReviewInput({ inputPath, outPath })).rejects.toThrow(
+      "Output already exists",
+    );
+  });
+
+  it("overwrites existing output when force is enabled", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "track.analysis-for-ai.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(outPath, "existing", "utf8");
+
+    await writeAiReviewInput({ force: true, inputPath, outPath });
+
+    const output = await readFile(outPath, "utf8");
+    expect(output).toContain('"promptInputVersion": 1');
+  });
+
+  it("fails clearly on invalid metadata", async () => {
+    const inputPath = join(tempDir, "invalid.analysis.json");
+    const outPath = join(tempDir, "track.analysis-for-ai.json");
+    await writeFile(inputPath, JSON.stringify({ schemaVersion: 1 }), "utf8");
+
+    await expect(writeAiReviewInput({ inputPath, outPath })).rejects.toThrow(
+      "Invalid analysis metadata",
+    );
+    await expect(stat(outPath)).rejects.toThrow();
   });
 });
 
