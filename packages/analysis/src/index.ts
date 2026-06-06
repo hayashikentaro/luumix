@@ -1,11 +1,16 @@
 import {
   METADATA_SCHEMA_VERSION,
   parseTrackAnalysisMetadata,
+  type FeatureSummary,
   type TrackAnalysisMetadata,
 } from "@luumix/metadata";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import {
+  extractFeatureSummary,
+  type FeatureExtractor,
+} from "./features.js";
 import {
   probeAudioFile,
   type AudioProbe,
@@ -16,6 +21,7 @@ export interface AnalyzeOptions {
   inputPath: string;
   outPath: string;
   force?: boolean;
+  extractFeatures?: FeatureExtractor;
   probeAudio?: AudioProbe;
 }
 
@@ -38,9 +44,13 @@ export async function analyzeFile(options: AnalyzeOptions): Promise<TrackAnalysi
 
   const content = await readFile(options.inputPath);
   const audioProbe = await (options.probeAudio ?? probeAudioFile)(options.inputPath);
+  const featureSummary = await (options.extractFeatures ?? extractFeatureSummary)(
+    options.inputPath,
+  );
   const metadata = createPlaceholderMetadata({
     audioProbe,
     content,
+    featureSummary,
     fileSizeBytes: inputStat.size,
     inputPath: options.inputPath,
   });
@@ -55,6 +65,7 @@ export async function analyzeFile(options: AnalyzeOptions): Promise<TrackAnalysi
 export function createPlaceholderMetadata(input: {
   audioProbe: AudioProbeResult;
   content: Buffer;
+  featureSummary: FeatureSummary;
   fileSizeBytes: number;
   inputPath: string;
 }): TrackAnalysisMetadata {
@@ -73,6 +84,7 @@ export function createPlaceholderMetadata(input: {
       container: input.audioProbe.container,
     },
     analysis: {
+      featureSummary: input.featureSummary,
       tempoCandidates: [],
       beatGridCandidates: [],
       downbeatCandidates: [],

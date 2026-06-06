@@ -48,7 +48,16 @@ Schema v1 can represent:
 - mix-in, mix-out, and avoid transition candidates
 - risk signals and auto-mix rejection
 
-It intentionally does not implement real audio analysis yet.
+The first low-level feature summary is compact and bounded. `featureSummary` may include:
+
+- `frameHopSec`: spacing between summary frames
+- `peakEnvelope`: per-frame maximum absolute sample value
+- `rmsEnvelope`: per-frame RMS energy
+- `silenceRangesSec`: coarse ranges inferred from low RMS values
+
+Feature arrays are derived at import time from decoded mono PCM and are not raw audio. They are intended for future visual reports and candidate generation, not as beat or downbeat detections.
+
+It intentionally does not implement BPM, beat grid, downbeat, phrase, or playback analysis yet.
 
 ## Fixtures
 
