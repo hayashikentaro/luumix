@@ -88,6 +88,14 @@ Validate the edited note:
 npm run validate-evaluation -- .luumix/metadata/track.evaluation.json
 ```
 
+Regenerate the report with the evaluation note included:
+
+```bash
+npm run report -- .luumix/metadata/track.analysis.json --evaluation .luumix/metadata/track.evaluation.json --out .luumix/reports/track.html --force
+```
+
+This keeps the analysis candidates and the human judgment/corrections on one inspection surface. The generated report can now include private path hints and listening judgments from the evaluation file, so do not commit or share it unless that is intentional.
+
 Evaluation notes are for local QA and future heuristic improvement. They do not change analysis metadata, AI review, manual overrides, or effective metadata. They are compact and exclude raw audio, feature envelopes, and full beat/downbeat arrays.
 
 Evaluation files may still contain private listening judgments or path hints. Edit `sourcePathHint` if needed, and do not commit or share private evaluation files unless that is intentional.

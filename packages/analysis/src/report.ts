@@ -9,8 +9,13 @@ import {
 } from "@luumix/metadata";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import {
+  type AnalysisEvaluationNote,
+  validateEvaluationFile,
+} from "./evaluation.js";
 
 export interface ReportOptions {
+  evaluationPath?: string;
   inputPath: string;
   outPath: string;
   force?: boolean;
@@ -38,13 +43,19 @@ export async function writeAnalysisReport(options: ReportOptions): Promise<void>
   const metadata = parseTrackAnalysisMetadata(
     JSON.parse(await readFile(options.inputPath, "utf8")),
   );
-  const html = generateAnalysisReportHtml(metadata);
+  const evaluation = options.evaluationPath
+    ? await validateEvaluationFile({ inputPath: options.evaluationPath })
+    : undefined;
+  const html = generateAnalysisReportHtml(metadata, evaluation);
 
   await mkdir(dirname(options.outPath), { recursive: true });
   await writeFile(options.outPath, html, "utf8");
 }
 
-export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): string {
+export function generateAnalysisReportHtml(
+  metadata: TrackAnalysisMetadata,
+  evaluation?: AnalysisEvaluationNote,
+): string {
   const title = `Luumix Analysis - ${metadata.sourceFile.path}`;
 
   return `<!doctype html>
@@ -180,6 +191,7 @@ export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): str
     <h2>Candidates</h2>
     ${renderCandidateSections(metadata)}
   </section>
+  ${evaluation ? renderEvaluationPanel(evaluation) : ""}
 </main>
 </body>
 </html>
@@ -440,6 +452,61 @@ function renderCandidateSections(metadata: TrackAnalysisMetadata): string {
   ].join("\n");
 }
 
+function renderEvaluationPanel(evaluation: AnalysisEvaluationNote): string {
+  return `<section>
+    <h2>Evaluation</h2>
+    <div class="panel">
+      <h3>Source</h3>
+      ${renderDefinitionList([
+        ["Content hash", evaluation.sourceContentHash],
+        ["Path hint", evaluation.sourcePathHint || "(none)"],
+      ])}
+      <h3>Expected</h3>
+      ${renderDefinitionList([
+        ["BPM", evaluation.expected.bpm == null ? "(unknown)" : formatNumber(evaluation.expected.bpm)],
+        ["Downbeat phase", evaluation.expected.downbeatPhaseId ?? "(unknown)"],
+        ["Notes", formatList(evaluation.expected.notes)],
+      ])}
+      <h3>Observed</h3>
+      ${renderDefinitionList([
+        ["Tempo candidate", evaluation.observed.tempoCandidateId ?? "(none)"],
+        ["Beat grid candidate", evaluation.observed.beatGridCandidateId ?? "(none)"],
+        ["Downbeat candidate", evaluation.observed.downbeatCandidateId ?? "(none)"],
+        ["Mix-in transition", evaluation.observed.mixInTransitionId ?? "(none)"],
+        ["Mix-out transition", evaluation.observed.mixOutTransitionId ?? "(none)"],
+      ])}
+      <h3>Judgments</h3>
+      ${renderDefinitionList([
+        ["BPM", evaluation.judgment.bpm],
+        ["Beat grid", evaluation.judgment.beatGrid],
+        ["Downbeat", evaluation.judgment.downbeat],
+        ["Transitions", evaluation.judgment.transitions],
+        ["Overall", evaluation.judgment.overall],
+      ])}
+      <h3>Corrections</h3>
+      ${renderDefinitionList([
+        ["BPM", evaluation.corrections.bpm == null ? "(none)" : formatNumber(evaluation.corrections.bpm)],
+        [
+          "First beat",
+          evaluation.corrections.firstBeatSec == null
+            ? "(none)"
+            : formatNumber(evaluation.corrections.firstBeatSec),
+        ],
+        [
+          "First downbeat",
+          evaluation.corrections.firstDownbeatSec == null
+            ? "(none)"
+            : formatNumber(evaluation.corrections.firstDownbeatSec),
+        ],
+        ["Mix-in seconds", formatNumberList(evaluation.corrections.mixInSec)],
+        ["Mix-out seconds", formatNumberList(evaluation.corrections.mixOutSec)],
+      ])}
+      <h3>Notes</h3>
+      ${renderList(evaluation.notes)}
+    </div>
+  </section>`;
+}
+
 function renderStructureCandidates(candidates: StructureCandidate[]): string {
   if (candidates.length === 0) {
     return renderEmptyCandidateSection("Structure candidates");
@@ -528,6 +595,24 @@ function renderDefinitionList(items: Array<[string, string | number]>): string {
       ([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value))}</dd>`,
     )
     .join("")}</dl>`;
+}
+
+function renderList(items: string[]): string {
+  if (items.length === 0) {
+    return `<p class="empty">No notes recorded.</p>`;
+  }
+
+  return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function formatList(items: string[]): string {
+  return items.length === 0 ? "(none)" : items.join("; ");
+}
+
+function formatNumberList(values: number[]): string {
+  return values.length === 0
+    ? "(none)"
+    : values.map((value) => formatNumber(value)).join(", ");
 }
 
 function formatOptional(value: number | undefined, suffix = ""): string {

@@ -34,6 +34,7 @@ interface ParsedArgs {
   force: boolean;
   format?: EvaluationSummaryFormat;
   aiReviewPath?: string;
+  evaluationPath?: string;
   overridesPath?: string;
 }
 
@@ -51,6 +52,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 
     if (args.command === "report") {
       await writeAnalysisReport({
+        evaluationPath: args.evaluationPath,
         inputPath: args.inputPath,
         outPath: args.outPath!,
         force: args.force,
@@ -135,6 +137,9 @@ export function resolveCliPaths(args: ParsedArgs): ParsedArgs {
     aiReviewPath: args.aiReviewPath
       ? resolveUserPath(args.aiReviewPath)
       : undefined,
+    evaluationPath: args.evaluationPath
+      ? resolveUserPath(args.evaluationPath)
+      : undefined,
     overridesPath: args.overridesPath
       ? resolveUserPath(args.overridesPath)
       : undefined,
@@ -170,6 +175,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const inputPaths: string[] = [];
   let outPath: string | undefined;
   let aiReviewPath: string | undefined;
+  let evaluationPath: string | undefined;
   let overridesPath: string | undefined;
   let format: EvaluationSummaryFormat | undefined;
   let force = false;
@@ -201,6 +207,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
       index += 1;
       if (!aiReviewPath) {
         throw new Error("Missing value for --ai-review");
+      }
+      continue;
+    }
+
+    if (arg === "--evaluation") {
+      evaluationPath = rest[index + 1];
+      index += 1;
+      if (!evaluationPath) {
+        throw new Error("Missing value for --evaluation");
       }
       continue;
     }
@@ -241,6 +256,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     throw new Error("Missing required --ai-review <path>");
   }
 
+  if (evaluationPath && command !== "report") {
+    throw new Error("--evaluation is only supported by the report command");
+  }
+
   return {
     command,
     inputPath: inputPaths[0]!,
@@ -249,6 +268,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     force,
     format,
     aiReviewPath,
+    evaluationPath,
     overridesPath,
   };
 }

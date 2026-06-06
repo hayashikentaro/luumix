@@ -525,6 +525,52 @@ describe("generateAnalysisReportHtml", () => {
     expect(html).toContain("No beat grid candidates are available yet.");
     expect(html).toContain("No downbeat candidates are available yet.");
   });
+
+  it("includes an escaped evaluation panel when evaluation is provided", async () => {
+    const metadata = await createResolvableMetadata();
+    const evaluation = parseAnalysisEvaluation({
+      ...createEvaluationTemplate(metadata, new Date("2026-01-02T03:04:05.000Z")),
+      sourcePathHint: "private/<track>.wav",
+      expected: {
+        bpm: 120,
+        downbeatPhaseId: "downbeat-phase-0",
+        notes: ["Expected <steady> beat."],
+      },
+      observed: {
+        tempoCandidateId: "tempo-primary",
+        beatGridCandidateId: "beat-grid-primary",
+        downbeatCandidateId: "downbeat-phase-0",
+        mixInTransitionId: "transition-mix-in-first-downbeat",
+        mixOutTransitionId: "transition-mix-out-outro-start",
+      },
+      judgment: {
+        bpm: "correct",
+        beatGrid: "aligned",
+        downbeat: "correct",
+        transitions: "plausible",
+        overall: "usable",
+      },
+      corrections: {
+        bpm: 120,
+        firstBeatSec: 0.5,
+        firstDownbeatSec: 0.5,
+        mixInSec: [0.5],
+        mixOutSec: [160],
+      },
+      notes: ["Human note with <unsafe> markup."],
+    });
+
+    const html = generateAnalysisReportHtml(metadata, evaluation);
+
+    expect(html).toContain("<h2>Evaluation</h2>");
+    expect(html).toContain("private/&lt;track&gt;.wav");
+    expect(html).toContain("Expected &lt;steady&gt; beat.");
+    expect(html).toContain("Human note with &lt;unsafe&gt; markup.");
+    expect(html).toContain("tempo-primary");
+    expect(html).toContain("beat-grid-primary");
+    expect(html).toContain("downbeat-phase-0");
+    expect(html).toContain("plausible");
+  });
 });
 
 describe("writeAnalysisReport", () => {
@@ -549,6 +595,20 @@ describe("writeAnalysisReport", () => {
     );
   });
 
+  it("fails clearly for invalid evaluation input and does not write a report", async () => {
+    const metadata = await createTestMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const evaluationPath = join(tempDir, "track.evaluation.json");
+    const outPath = join(tempDir, "report.html");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(evaluationPath, JSON.stringify({ schemaVersion: 1 }), "utf8");
+
+    await expect(
+      writeAnalysisReport({ evaluationPath, inputPath, outPath }),
+    ).rejects.toThrow("sourceContentHash");
+    await expect(stat(outPath)).rejects.toThrow();
+  });
+
   it("writes a standalone HTML report and creates output directories", async () => {
     const metadata = await createTestMetadata();
     const inputPath = join(tempDir, "track.analysis.json");
@@ -560,6 +620,35 @@ describe("writeAnalysisReport", () => {
     const html = await readFile(outPath, "utf8");
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("Luumix Analysis Report");
+  });
+
+  it("writes an evaluation panel when evaluation input is provided", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const evaluationPath = join(tempDir, "track.evaluation.json");
+    const outPath = join(tempDir, "reports", "track.html");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(
+      evaluationPath,
+      JSON.stringify({
+        ...createEvaluationTemplate(metadata),
+        judgment: {
+          bpm: "correct",
+          beatGrid: "aligned",
+          downbeat: "correct",
+          transitions: "plausible",
+          overall: "usable",
+        },
+        notes: ["Report should include this evaluation note."],
+      }),
+      "utf8",
+    );
+
+    await writeAnalysisReport({ evaluationPath, inputPath, outPath });
+
+    const html = await readFile(outPath, "utf8");
+    expect(html).toContain("<h2>Evaluation</h2>");
+    expect(html).toContain("Report should include this evaluation note.");
   });
 });
 
@@ -778,6 +867,7 @@ describe("analysis evaluation notes", () => {
       force: false,
       format: undefined,
       aiReviewPath: undefined,
+      evaluationPath: undefined,
       overridesPath: undefined,
     });
   });
@@ -976,8 +1066,47 @@ describe("evaluation summaries", () => {
       force: false,
       format: "markdown",
       aiReviewPath: undefined,
+      evaluationPath: undefined,
       overridesPath: undefined,
     });
+  });
+});
+
+describe("parseArgs report evaluation", () => {
+  it("parses report evaluation input", () => {
+    expect(
+      parseArgs([
+        "report",
+        "track.analysis.json",
+        "--evaluation",
+        "track.evaluation.json",
+        "--out",
+        "track.html",
+      ]),
+    ).toEqual({
+      command: "report",
+      inputPath: "track.analysis.json",
+      inputPaths: ["track.analysis.json"],
+      outPath: "track.html",
+      force: false,
+      format: undefined,
+      aiReviewPath: undefined,
+      evaluationPath: "track.evaluation.json",
+      overridesPath: undefined,
+    });
+  });
+
+  it("rejects evaluation input for non-report commands", () => {
+    expect(() =>
+      parseArgs([
+        "analyze",
+        "track.wav",
+        "--evaluation",
+        "track.evaluation.json",
+        "--out",
+        "track.analysis.json",
+      ]),
+    ).toThrow("--evaluation is only supported by the report command");
   });
 });
 
