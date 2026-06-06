@@ -53,6 +53,22 @@ export type {
   InitOverridesOptions,
   ResolveEffectiveOptions,
 } from "./effective.js";
+export {
+  createEvaluationTemplate,
+  parseAnalysisEvaluation,
+  validateEvaluationFile,
+  writeEvaluationTemplate,
+} from "./evaluation.js";
+export type {
+  AnalysisEvaluationNote,
+  BpmJudgment,
+  BeatGridJudgment,
+  DownbeatJudgment,
+  InitEvaluationOptions,
+  OverallJudgment,
+  TransitionJudgment,
+  ValidateEvaluationOptions,
+} from "./evaluation.js";
 export { estimateBeatGridCandidates } from "./beat-grid.js";
 export type { BeatGridEstimationInput } from "./beat-grid.js";
 export {

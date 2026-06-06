@@ -3,6 +3,10 @@ import {
   writeOverrideTemplate,
   writeResolvedMetadata,
 } from "./effective.js";
+import {
+  validateEvaluationFile,
+  writeEvaluationTemplate,
+} from "./evaluation.js";
 import { writeAiReviewInput } from "./ai-review-input.js";
 import { writeAiReviewedMetadata } from "./ai-review.js";
 import { analyzeFile } from "./index.js";
@@ -15,10 +19,12 @@ interface ParsedArgs {
     | "analyze"
     | "apply-ai-review"
     | "init-overrides"
+    | "init-evaluation"
     | "report"
-    | "resolve";
+    | "resolve"
+    | "validate-evaluation";
   inputPath: string;
-  outPath: string;
+  outPath?: string;
   force: boolean;
   aiReviewPath?: string;
   overridesPath?: string;
@@ -30,7 +36,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     if (args.command === "analyze") {
       await analyzeFile({
         inputPath: args.inputPath,
-        outPath: args.outPath,
+        outPath: args.outPath!,
         force: args.force,
       });
       return;
@@ -39,7 +45,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     if (args.command === "report") {
       await writeAnalysisReport({
         inputPath: args.inputPath,
-        outPath: args.outPath,
+        outPath: args.outPath!,
         force: args.force,
       });
       return;
@@ -48,7 +54,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     if (args.command === "ai-input") {
       await writeAiReviewInput({
         inputPath: args.inputPath,
-        outPath: args.outPath,
+        outPath: args.outPath!,
         force: args.force,
       });
       return;
@@ -58,16 +64,33 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       await writeAiReviewedMetadata({
         inputPath: args.inputPath,
         aiReviewPath: args.aiReviewPath!,
-        outPath: args.outPath,
+        outPath: args.outPath!,
         force: args.force,
       });
+      return;
+    }
+
+    if (args.command === "init-evaluation") {
+      await writeEvaluationTemplate({
+        inputPath: args.inputPath,
+        outPath: args.outPath!,
+        force: args.force,
+      });
+      return;
+    }
+
+    if (args.command === "validate-evaluation") {
+      await validateEvaluationFile({
+        inputPath: args.inputPath,
+      });
+      console.log(`luumix: evaluation note is valid: ${args.inputPath}`);
       return;
     }
 
     if (args.command === "resolve") {
       await writeResolvedMetadata({
         inputPath: args.inputPath,
-        outPath: args.outPath,
+        outPath: args.outPath!,
         force: args.force,
         overridesPath: args.overridesPath,
       });
@@ -76,7 +99,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 
     await writeOverrideTemplate({
       inputPath: args.inputPath,
-      outPath: args.outPath,
+      outPath: args.outPath!,
       force: args.force,
     });
   } catch (error) {
@@ -90,7 +113,7 @@ export function resolveCliPaths(args: ParsedArgs): ParsedArgs {
   return {
     ...args,
     inputPath: resolveUserPath(args.inputPath),
-    outPath: resolveUserPath(args.outPath),
+    outPath: args.outPath ? resolveUserPath(args.outPath) : undefined,
     aiReviewPath: args.aiReviewPath
       ? resolveUserPath(args.aiReviewPath)
       : undefined,
@@ -114,12 +137,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
     command !== "ai-input" &&
     command !== "analyze" &&
     command !== "apply-ai-review" &&
+    command !== "init-evaluation" &&
     command !== "init-overrides" &&
     command !== "report" &&
-    command !== "resolve"
+    command !== "resolve" &&
+    command !== "validate-evaluation"
   ) {
     throw new Error(
-      "Expected command: analyze, report, ai-input, apply-ai-review, resolve, or init-overrides",
+      "Expected command: analyze, report, ai-input, apply-ai-review, init-evaluation, validate-evaluation, resolve, or init-overrides",
     );
   }
 
@@ -178,7 +203,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     throw new Error("Missing input file path");
   }
 
-  if (!outPath) {
+  if (command !== "validate-evaluation" && !outPath) {
     throw new Error("Missing required --out <path>");
   }
 

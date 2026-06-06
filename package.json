@@ -12,11 +12,13 @@
     "analyze": "npm --workspace @luumix/analysis run analyze --",
     "apply-ai-review": "npm --workspace @luumix/analysis run apply-ai-review --",
     "build": "npm run build --workspace @luumix/metadata && npm run build --workspace @luumix/analysis",
+    "init-evaluation": "npm --workspace @luumix/analysis run init-evaluation --",
     "init-overrides": "npm --workspace @luumix/analysis run init-overrides --",
     "report": "npm --workspace @luumix/analysis run report --",
     "resolve": "npm --workspace @luumix/analysis run resolve --",
     "test": "npm run build --workspace @luumix/metadata && npm run test --workspaces --if-present",
-    "typecheck": "npm run build --workspace @luumix/metadata && npm run typecheck --workspace @luumix/analysis"
+    "typecheck": "npm run build --workspace @luumix/metadata && npm run typecheck --workspace @luumix/analysis",
+    "validate-evaluation": "npm --workspace @luumix/analysis run validate-evaluation --"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

@@ -14,9 +14,13 @@ import {
 import {
   analyzeFile,
   applyAiReview,
+  createEvaluationTemplate,
   createAiReviewInput,
+  parseAnalysisEvaluation,
+  validateEvaluationFile,
   writeAiReviewInput,
   writeAiReviewedMetadata,
+  writeEvaluationTemplate,
   writeOverrideTemplate,
   writeResolvedMetadata,
 } from "../src/index.js";
@@ -677,6 +681,101 @@ describe("writeAiReviewInput", () => {
       "Invalid analysis metadata",
     );
     await expect(stat(outPath)).rejects.toThrow();
+  });
+});
+
+describe("analysis evaluation notes", () => {
+  it("initializes a compact evaluation template from sample metadata", async () => {
+    const metadata = parseTrackAnalysisMetadata(
+      JSON.parse(
+        await readFile(
+          join(process.cwd(), "../../fixtures/metadata/simple-124bpm.analysis.json"),
+          "utf8",
+        ),
+      ),
+    );
+
+    const evaluation = createEvaluationTemplate(
+      metadata,
+      new Date("2026-01-02T03:04:05.000Z"),
+    );
+
+    expect(evaluation.sourceContentHash).toBe(metadata.sourceFile.contentHash);
+    expect(evaluation.sourcePathHint).toBe(metadata.sourceFile.path);
+    expect(evaluation.createdAt).toBe("2026-01-02T03:04:05.000Z");
+    expect(evaluation.observed).toEqual({
+      tempoCandidateId: metadata.analysis.defaults.tempoCandidateId,
+      beatGridCandidateId: metadata.analysis.defaults.beatGridCandidateId,
+      downbeatCandidateId: metadata.analysis.defaults.downbeatCandidateId,
+      mixInTransitionId: metadata.analysis.defaults.mixInTransitionId,
+      mixOutTransitionId: metadata.analysis.defaults.mixOutTransitionId,
+    });
+    expect(evaluation.judgment).toEqual({
+      bpm: "unknown",
+      beatGrid: "unknown",
+      downbeat: "unknown",
+      transitions: "unknown",
+      overall: "unknown",
+    });
+    expect(parseAnalysisEvaluation(evaluation)).toEqual(evaluation);
+  });
+
+  it("writes an evaluation template and refuses overwrite unless forced", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "metadata", "track.evaluation.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+
+    await writeEvaluationTemplate({ inputPath, outPath });
+    await expect(writeEvaluationTemplate({ inputPath, outPath })).rejects.toThrow(
+      "Output already exists",
+    );
+
+    await writeEvaluationTemplate({ force: true, inputPath, outPath });
+    const evaluation = await validateEvaluationFile({ inputPath: outPath });
+
+    expect(evaluation.sourceContentHash).toBe(metadata.sourceFile.contentHash);
+    expect(evaluation.judgment.overall).toBe("unknown");
+  });
+
+  it("rejects invalid judgment values", async () => {
+    const evaluation = createEvaluationTemplate(
+      await createResolvableMetadata(),
+      new Date("2026-01-02T03:04:05.000Z"),
+    );
+
+    expect(() =>
+      parseAnalysisEvaluation({
+        ...evaluation,
+        judgment: {
+          ...evaluation.judgment,
+          bpm: "closeEnough",
+        },
+      }),
+    ).toThrow("judgment.bpm must be one of");
+  });
+
+  it("does not include feature envelopes or full timing arrays", async () => {
+    const metadata = await createResolvableMetadata();
+    const evaluation = createEvaluationTemplate(metadata);
+    const serialized = JSON.stringify(evaluation);
+
+    expect(serialized).not.toContain("featureSummary");
+    expect(serialized).not.toContain("peakEnvelope");
+    expect(serialized).not.toContain("rmsEnvelope");
+    expect(serialized).not.toContain('"beatsSec":');
+    expect(serialized).not.toContain('"downbeatsSec":');
+  });
+
+  it("parses validate-evaluation without requiring --out", () => {
+    expect(parseArgs(["validate-evaluation", "track.evaluation.json"])).toEqual({
+      command: "validate-evaluation",
+      inputPath: "track.evaluation.json",
+      outPath: undefined,
+      force: false,
+      aiReviewPath: undefined,
+      overridesPath: undefined,
+    });
   });
 });
 

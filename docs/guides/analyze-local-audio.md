@@ -66,6 +66,32 @@ npm run report -- .luumix/metadata/track.analysis.json --out .luumix/reports/tra
 
 Open `.luumix/reports/track.html` in a browser. It does not require a server.
 
+## Record Evaluation Notes
+
+After inspecting the report, create a local evaluation note:
+
+```bash
+npm run init-evaluation -- .luumix/metadata/track.analysis.json --out .luumix/metadata/track.evaluation.json
+```
+
+Edit `.luumix/metadata/track.evaluation.json` with your listening judgment:
+
+- Whether BPM was correct, half-tempo, double-tempo, wrong, or unknown.
+- Whether the beat grid aligned, shifted, was unstable, wrong, or unknown.
+- Whether the selected downbeat phase was correct, wrong, ambiguous, or unknown.
+- Whether mix-in and mix-out candidates looked plausible, too early, too late, wrong, or unknown.
+- Any manual correction values that would make the track usable.
+
+Validate the edited note:
+
+```bash
+npm run validate-evaluation -- .luumix/metadata/track.evaluation.json
+```
+
+Evaluation notes are for local QA and future heuristic improvement. They do not change analysis metadata, AI review, manual overrides, or effective metadata. They are compact and exclude raw audio, feature envelopes, and full beat/downbeat arrays.
+
+Evaluation files may still contain private listening judgments or path hints. Edit `sourcePathHint` if needed, and do not commit or share private evaluation files unless that is intentional.
+
 ## Generate AI Review Input
 
 Optionally create a compact JSON summary for AI-assisted review:

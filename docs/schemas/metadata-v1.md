@@ -65,6 +65,20 @@ The first downbeat candidates are four explicit 4/4 phase hypotheses generated f
 
 The first structure and transition candidates are conservative bar-aligned hints generated from the selected downbeat grid. They can mark possible first usable downbeats, intro ends, section changes, outro starts, mix-in points, and mix-out points for inspection. They are not full song-section recognition and are not treated as DJ-safe transitions without later review.
 
+## Evaluation Notes
+
+The analysis CLI can create local evaluation note JSON files for private QA after inspecting a report. These files are not part of `TrackAnalysisMetadata`; they capture human judgments that can guide future heuristic improvements.
+
+Evaluation notes include:
+
+- source content hash and an editable path hint
+- expected BPM or downbeat phase, if known
+- observed default candidate IDs
+- judgments for BPM, beat grid, downbeat phase, transitions, and overall usability
+- optional correction values and notes
+
+They intentionally exclude raw audio, feature envelopes, full beat arrays, and full downbeat arrays. They may still reveal private listening judgments or path hints, so keep them local unless intentionally shared.
+
 ## AI Review Input
 
 The analysis CLI can generate a compact `analysis-for-ai` JSON file from a full `TrackAnalysisMetadata` document. This file is prompt input for future AI review, not a separate persisted metadata layer.
