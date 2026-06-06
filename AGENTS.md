@@ -46,6 +46,18 @@ The product value is a stable, low-friction listening flow where existing tracks
 
 Dangerous or high-uncertainty paths should be structurally constrained where possible. Inside safe capability boundaries, AI agents should be able to operate freely.
 
+## Canonical Plan
+
+Agents should treat this as the main project plan:
+
+```text
+docs/implementation-plan.md
+```
+
+Read it before planning implementation work. It defines the analysis-first sequence and the current phase ordering.
+
+Use `docs/issues/` for decision records and unresolved tradeoffs. Do not treat issue documents as the primary project plan unless they explicitly say so.
+
 ## Current Project State
 
 The repository is in early product/architecture initialization.
@@ -53,9 +65,11 @@ The repository is in early product/architecture initialization.
 Current files:
 
 ```text
-README.md                   Product overview, intent, non-goals, milestones
-AGENTS.md                   Repository guidance for AI agents
-docs/analysis-pipeline.md   Import-time audio analysis and AI review pipeline
+README.md                         Product overview, intent, non-goals, milestones
+AGENTS.md                         Repository guidance for AI agents
+docs/implementation-plan.md       Main project plan and phase sequence
+docs/analysis-pipeline.md         Import-time audio analysis and AI review pipeline
+docs/issues/0001-analysis-first-plan.md  Decision record for analysis-first direction
 ```
 
 Planned documentation areas:
