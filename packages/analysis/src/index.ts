@@ -30,6 +30,14 @@ import {
 } from "./structure.js";
 import { estimateTempoCandidates } from "./tempo.js";
 
+export {
+  writeOverrideTemplate,
+  writeResolvedMetadata,
+} from "./effective.js";
+export type {
+  InitOverridesOptions,
+  ResolveEffectiveOptions,
+} from "./effective.js";
 export { estimateBeatGridCandidates } from "./beat-grid.js";
 export type { BeatGridEstimationInput } from "./beat-grid.js";
 export {

@@ -11,7 +11,11 @@ import {
   createFfmpegFeatureExtractor,
   type SpawnLike,
 } from "../src/features.js";
-import { analyzeFile } from "../src/index.js";
+import {
+  analyzeFile,
+  writeOverrideTemplate,
+  writeResolvedMetadata,
+} from "../src/index.js";
 import {
   createFfprobeAudioProbe,
   parseFfprobeOutput,
@@ -548,6 +552,142 @@ describe("writeAnalysisReport", () => {
   });
 });
 
+describe("writeResolvedMetadata", () => {
+  it("resolves effective metadata from analysis defaults without overrides", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "track.effective.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+
+    await writeResolvedMetadata({ inputPath, outPath });
+
+    const resolved = await readMetadata(outPath);
+    expect(resolved.effective?.bpm).toBeCloseTo(120, 3);
+    expect(resolved.effective?.bpmSource).toBe("analysis");
+    expect(resolved.effective?.beatGrid.source).toBe("analysis");
+    expect(resolved.effective?.downbeat.source).toBe("analysis");
+    expect(resolved.analysis).toEqual(metadata.analysis);
+  });
+
+  it("applies manual override BPM over aiReview and analysis", async () => {
+    const metadata = await createResolvableMetadata();
+    metadata.aiReview = {
+      selectedTempoCandidateId: "tempo-double",
+      autoMix: { status: "approved", reasons: ["synthetic test"] },
+    };
+    const inputPath = join(tempDir, "track.analysis.json");
+    const overridesPath = join(tempDir, "track.overrides.json");
+    const outPath = join(tempDir, "track.effective.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(overridesPath, JSON.stringify({ bpm: 124 }), "utf8");
+
+    await writeResolvedMetadata({ inputPath, overridesPath, outPath });
+
+    const resolved = await readMetadata(outPath);
+    expect(resolved.effective?.bpm).toBe(124);
+    expect(resolved.effective?.bpmSource).toBe("manual");
+    expect(resolved.manualOverrides.bpm).toBe(124);
+  });
+
+  it("applies manual first downbeat and mix points over defaults", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const overridesPath = join(tempDir, "track.overrides.json");
+    const outPath = join(tempDir, "track.effective.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(
+      overridesPath,
+      JSON.stringify({
+        firstDownbeatSec: 1.25,
+        mixInSec: [9.5],
+        mixOutSec: [120.5],
+      }),
+      "utf8",
+    );
+
+    await writeResolvedMetadata({ inputPath, overridesPath, outPath });
+
+    const resolved = await readMetadata(outPath);
+    expect(resolved.effective?.downbeat.firstDownbeatSec).toBe(1.25);
+    expect(resolved.effective?.downbeat.source).toBe("manual");
+    expect(resolved.effective?.mixInSec).toEqual([9.5]);
+    expect(resolved.effective?.mixOutSec).toEqual([120.5]);
+  });
+
+  it("resolves autoMixDisabled to a rejected safe effective state", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const overridesPath = join(tempDir, "track.overrides.json");
+    const outPath = join(tempDir, "track.effective.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(
+      overridesPath,
+      JSON.stringify({
+        autoMixDisabled: true,
+        mixInSec: [9.5],
+        mixOutSec: [120.5],
+      }),
+      "utf8",
+    );
+
+    await writeResolvedMetadata({ inputPath, overridesPath, outPath });
+
+    const resolved = await readMetadata(outPath);
+    expect(resolved.effective?.autoMix.status).toBe("rejected");
+    expect(resolved.effective?.mixInSec).toEqual([]);
+    expect(resolved.effective?.mixOutSec).toEqual([]);
+  });
+
+  it("refuses existing output without force", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "track.effective.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(outPath, "existing", "utf8");
+
+    await expect(writeResolvedMetadata({ inputPath, outPath })).rejects.toThrow(
+      "Output already exists",
+    );
+  });
+
+  it("fails clearly for invalid overrides", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const overridesPath = join(tempDir, "track.overrides.json");
+    const outPath = join(tempDir, "track.effective.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+    await writeFile(overridesPath, JSON.stringify({ bpm: -1 }), "utf8");
+
+    await expect(
+      writeResolvedMetadata({ inputPath, overridesPath, outPath }),
+    ).rejects.toThrow("Invalid manual overrides file");
+  });
+});
+
+describe("writeOverrideTemplate", () => {
+  it("writes a manual override template from analysis defaults", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.analysis.json");
+    const outPath = join(tempDir, "track.overrides.json");
+    await writeFile(inputPath, JSON.stringify(metadata), "utf8");
+
+    await writeOverrideTemplate({ inputPath, outPath });
+
+    const template = JSON.parse(await readFile(outPath, "utf8")) as {
+      bpm?: number;
+      firstBeatSec?: number;
+      firstDownbeatSec?: number;
+      mixInSec?: number[];
+      mixOutSec?: number[];
+    };
+    expect(template.bpm).toBeCloseTo(120, 3);
+    expect(template.firstBeatSec).toBeDefined();
+    expect(template.firstDownbeatSec).toBeDefined();
+    expect(template.mixInSec?.length).toBeGreaterThan(0);
+    expect(template.mixOutSec?.length).toBeGreaterThan(0);
+  });
+});
+
 describe("computeFeatureSummary", () => {
   it("computes peak and RMS envelopes for fixed frames", () => {
     const summary = computeFeatureSummary([0, 1, -1, 0, 0.5, -0.5], {
@@ -604,6 +744,20 @@ async function createTestMetadata(summary = featureSummary, probe = probeResult)
     outPath,
     probeAudio: async () => probe,
   });
+}
+
+async function createResolvableMetadata() {
+  const metadata = await createTestMetadata(createPulseFeatureSummary(120, 180), {
+    ...probeResult,
+    durationSec: 180,
+  });
+
+  metadata.analysis.defaults.autoMix = {
+    status: "approved",
+    reasons: ["Approved in synthetic resolver test."],
+  };
+
+  return metadata;
 }
 
 function createPulseFeatureSummary(bpm: number, durationSec = 8) {

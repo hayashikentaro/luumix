@@ -66,6 +66,46 @@ npm run report -- .luumix/metadata/track.analysis.json --out .luumix/reports/tra
 
 Open `.luumix/reports/track.html` in a browser. It does not require a server.
 
+## Apply Manual Overrides
+
+After inspecting the report, create an override template:
+
+```bash
+npm run init-overrides -- .luumix/metadata/track.analysis.json --out .luumix/metadata/track.overrides.json
+```
+
+Edit `.luumix/metadata/track.overrides.json` with any manual corrections. The file contains only `manualOverrides`; do not edit generated analysis fields.
+
+Example override file:
+
+```json
+{
+  "bpm": 124,
+  "firstBeatSec": 0.48,
+  "firstDownbeatSec": 0.48,
+  "mixInSec": [0.48],
+  "mixOutSec": [248.12],
+  "autoMixDisabled": false,
+  "notes": ["Manual correction after inspecting report."]
+}
+```
+
+Resolve effective metadata:
+
+```bash
+npm run resolve -- .luumix/metadata/track.analysis.json --overrides .luumix/metadata/track.overrides.json --out .luumix/metadata/track.effective.json
+```
+
+If no override file is needed, resolve from the analysis defaults:
+
+```bash
+npm run resolve -- .luumix/metadata/track.analysis.json --out .luumix/metadata/track.effective.json
+```
+
+The resolved output keeps the full `TrackAnalysisMetadata` shape, preserves generated analysis, applies `manualOverrides > aiReview > analysis.defaults`, and populates `effective`.
+
+Do not commit private override files or effective metadata unless that is intentional.
+
 ## Inspection Checklist
 
 When inspecting the report:
@@ -103,5 +143,6 @@ After testing one private track, report back with:
 - Whether beat ticks align with visible or audible beats.
 - Which downbeat phase looked most plausible.
 - Whether structure, mix-in, and mix-out candidates look useful or obviously wrong.
+- Any manual overrides applied and whether `effective` resolved as expected.
 - Any surprising risk notes.
 - Optional screenshot of the report, if it does not expose private information. Do not commit private reports unless that is intentional.

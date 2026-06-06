@@ -65,6 +65,32 @@ The first downbeat candidates are four explicit 4/4 phase hypotheses generated f
 
 The first structure and transition candidates are conservative bar-aligned hints generated from the selected downbeat grid. They can mark possible first usable downbeats, intro ends, section changes, outro starts, mix-in points, and mix-out points for inspection. They are not full song-section recognition and are not treated as DJ-safe transitions without later review.
 
+## Manual Override Files
+
+The analysis CLI can resolve effective metadata from an analysis file plus an optional manual override file. The override file contains only the `manualOverrides` object, not a full metadata document.
+
+Example:
+
+```json
+{
+  "bpm": 124,
+  "firstBeatSec": 0.48,
+  "firstDownbeatSec": 0.48,
+  "mixInSec": [0.48],
+  "mixOutSec": [248.12],
+  "autoMixDisabled": false,
+  "notes": ["Manual correction after inspecting report."]
+}
+```
+
+Effective metadata resolution applies:
+
+```text
+manualOverrides > aiReview > analysis.defaults
+```
+
+The resolved output keeps generated `analysis` unchanged and writes the resolved values to `effective`.
+
 ## Fixtures
 
 Sample metadata fixtures are synthetic and illustrative:

@@ -1,13 +1,18 @@
 #!/usr/bin/env node
+import {
+  writeOverrideTemplate,
+  writeResolvedMetadata,
+} from "./effective.js";
 import { analyzeFile } from "./index.js";
 import { writeAnalysisReport } from "./report.js";
 import { isAbsolute, resolve } from "node:path";
 
 interface ParsedArgs {
-  command: "analyze" | "report";
+  command: "analyze" | "init-overrides" | "report" | "resolve";
   inputPath: string;
   outPath: string;
   force: boolean;
+  overridesPath?: string;
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
@@ -22,7 +27,26 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       return;
     }
 
-    await writeAnalysisReport({
+    if (args.command === "report") {
+      await writeAnalysisReport({
+        inputPath: args.inputPath,
+        outPath: args.outPath,
+        force: args.force,
+      });
+      return;
+    }
+
+    if (args.command === "resolve") {
+      await writeResolvedMetadata({
+        inputPath: args.inputPath,
+        outPath: args.outPath,
+        force: args.force,
+        overridesPath: args.overridesPath,
+      });
+      return;
+    }
+
+    await writeOverrideTemplate({
       inputPath: args.inputPath,
       outPath: args.outPath,
       force: args.force,
@@ -39,6 +63,9 @@ export function resolveCliPaths(args: ParsedArgs): ParsedArgs {
     ...args,
     inputPath: resolveUserPath(args.inputPath),
     outPath: resolveUserPath(args.outPath),
+    overridesPath: args.overridesPath
+      ? resolveUserPath(args.overridesPath)
+      : undefined,
   };
 }
 
@@ -52,12 +79,18 @@ function resolveUserPath(path: string): string {
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const [command, ...rest] = argv;
-  if (command !== "analyze" && command !== "report") {
-    throw new Error("Expected command: analyze or report");
+  if (
+    command !== "analyze" &&
+    command !== "init-overrides" &&
+    command !== "report" &&
+    command !== "resolve"
+  ) {
+    throw new Error("Expected command: analyze, report, resolve, or init-overrides");
   }
 
   let inputPath: string | undefined;
   let outPath: string | undefined;
+  let overridesPath: string | undefined;
   let force = false;
 
   for (let index = 0; index < rest.length; index += 1) {
@@ -68,6 +101,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
       index += 1;
       if (!outPath) {
         throw new Error("Missing value for --out");
+      }
+      continue;
+    }
+
+    if (arg === "--overrides") {
+      overridesPath = rest[index + 1];
+      index += 1;
+      if (!overridesPath) {
+        throw new Error("Missing value for --overrides");
       }
       continue;
     }
@@ -100,6 +142,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     inputPath,
     outPath,
     force,
+    overridesPath,
   };
 }
 
