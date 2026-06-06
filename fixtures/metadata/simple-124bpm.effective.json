@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "sourceFile": {
+    "libraryId": "fixture-simple-124bpm",
+    "path": "synthetic/simple-124bpm.wav",
+    "contentHash": "sha256:fixture-simple-124bpm",
+    "fileSizeBytes": 0,
+    "durationSec": 210,
+    "sampleRate": 48000,
+    "channels": 2,
+    "codec": "pcm_s16le",
+    "container": "wav"
+  },
+  "bpm": 124,
+  "bpmSource": "aiReview",
+  "beatGrid": {
+    "source": "aiReview",
+    "candidateId": "grid-tight",
+    "firstBeatSec": 0.968,
+    "bpm": 124,
+    "beatsSec": [0.968, 1.452, 1.935, 2.419, 2.903, 3.387, 3.871, 4.355]
+  },
+  "downbeat": {
+    "source": "aiReview",
+    "candidateId": "downbeat-phase-0",
+    "firstDownbeatSec": 0.968,
+    "downbeatsSec": [0.968, 2.903, 4.839, 6.774]
+  },
+  "mixInSec": [15.484],
+  "mixOutSec": [185.806],
+  "autoMix": {
+    "status": "approved",
+    "reasons": ["Tempo and grid are stable enough for a conservative phrase-aware mix."]
+  }
+}

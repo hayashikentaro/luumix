@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+
+/.luumix/
+/library/
+/metadata/
+/analysis-cache/
+*.analysis.json
+*.effective-analysis.json
+
+!fixtures/metadata/
+!fixtures/metadata/*.analysis.json
+!fixtures/metadata/*.effective.json

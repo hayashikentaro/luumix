@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "sourceFile": {
+    "libraryId": "fixture-simple-124bpm",
+    "path": "synthetic/simple-124bpm.wav",
+    "contentHash": "sha256:fixture-simple-124bpm",
+    "fileSizeBytes": 0,
+    "durationSec": 210,
+    "sampleRate": 48000,
+    "channels": 2,
+    "codec": "pcm_s16le",
+    "container": "wav"
+  },
+  "analysis": {
+    "featureSummary": {
+      "frameHopSec": 0.5,
+      "peakEnvelope": [0, 0.2, 0.64, 0.71, 0.7, 0.66],
+      "rmsEnvelope": [0, 0.1, 0.48, 0.55, 0.52, 0.42],
+      "onsetStrength": [0, 0.15, 0.8, 0.62, 0.78, 0.59],
+      "silenceRangesSec": [
+        {
+          "startSec": 0,
+          "endSec": 0.5
+        }
+      ]
+    },
+    "tempoCandidates": [
+      {
+        "id": "tempo-124",
+        "bpm": 124,
+        "confidence": 0.86,
+        "source": "analyzer",
+        "notes": ["Stable synthetic four-on-the-floor pulse."]
+      },
+      {
+        "id": "tempo-62",
+        "bpm": 62,
+        "confidence": 0.36,
+        "source": "derived-half",
+        "notes": ["Half-tempo alternative retained for review."]
+      },
+      {
+        "id": "tempo-248",
+        "bpm": 248,
+        "confidence": 0.22,
+        "source": "derived-double",
+        "notes": ["Double-tempo alternative retained for review."]
+      }
+    ],
+    "beatGridCandidates": [
+      {
+        "id": "grid-tight",
+        "tempoCandidateId": "tempo-124",
+        "firstBeatSec": 0.968,
+        "confidence": 0.84,
+        "stability": 0.91,
+        "beatsSec": [0.968, 1.452, 1.935, 2.419, 2.903, 3.387, 3.871, 4.355]
+      },
+      {
+        "id": "grid-late",
+        "tempoCandidateId": "tempo-124",
+        "firstBeatSec": 1.089,
+        "confidence": 0.43,
+        "stability": 0.66,
+        "beatsSec": [1.089, 1.573, 2.056, 2.54, 3.024, 3.508, 3.992, 4.476]
+      }
+    ],
+    "downbeatCandidates": [
+      {
+        "id": "downbeat-phase-0",
+        "beatGridId": "grid-tight",
+        "phaseBeatIndex": 0,
+        "confidence": 0.73,
+        "downbeatsSec": [0.968, 2.903, 4.839, 6.774],
+        "supportingSignals": ["Kick accent aligns with phrase start."]
+      },
+      {
+        "id": "downbeat-phase-2",
+        "beatGridId": "grid-tight",
+        "phaseBeatIndex": 2,
+        "confidence": 0.51,
+        "downbeatsSec": [1.935, 3.871, 5.806, 7.742],
+        "supportingSignals": ["Alternate phase retained due to intro ambiguity."]
+      }
+    ],
+    "structureCandidates": [
+      {
+        "id": "structure-first-usable-downbeat",
+        "kind": "firstUsableDownbeat",
+        "timeSec": 15.484,
+        "barNumber": 8,
+        "confidence": 0.76,
+        "reasons": ["Energy and onset density become stable."]
+      },
+      {
+        "id": "structure-outro-start",
+        "kind": "outroStart",
+        "timeSec": 185.806,
+        "barNumber": 96,
+        "confidence": 0.7,
+        "reasons": ["Energy envelope begins sustained decline."]
+      }
+    ],
+    "transitionCandidates": {
+      "mixIn": [
+        {
+          "id": "mix-in-8",
+          "kind": "mixIn",
+          "timeSec": 15.484,
+          "barNumber": 8,
+          "suggestedLengthBars": 16,
+          "score": 0.82,
+          "reasons": ["Phrase boundary with stable beat grid."]
+        },
+        {
+          "id": "mix-in-16",
+          "kind": "mixIn",
+          "timeSec": 31.936,
+          "barNumber": 16,
+          "suggestedLengthBars": 16,
+          "score": 0.77,
+          "reasons": ["Conservative later entry."]
+        }
+      ],
+      "mixOut": [
+        {
+          "id": "mix-out-88",
+          "kind": "mixOut",
+          "timeSec": 169.806,
+          "barNumber": 88,
+          "suggestedLengthBars": 16,
+          "score": 0.72,
+          "reasons": ["Stable phrase boundary before outro."]
+        },
+        {
+          "id": "mix-out-96",
+          "kind": "mixOut",
+          "timeSec": 185.806,
+          "barNumber": 96,
+          "suggestedLengthBars": 16,
+          "score": 0.79,
+          "reasons": ["Outro start with declining energy."]
+        }
+      ],
+      "avoid": [
+        {
+          "id": "avoid-breakdown",
+          "kind": "avoid",
+          "timeSec": 92.903,
+          "barNumber": 48,
+          "score": 0.68,
+          "reasons": ["Short breakdown may make beat grid hard to hear."],
+          "riskNotes": ["Avoid transition starts here until structure analysis improves."]
+        }
+      ]
+    },
+    "riskSignals": {
+      "tempoUnstable": false,
+      "downbeatAmbiguous": true,
+      "doubleTempoAmbiguous": true,
+      "lowConfidence": false,
+      "unsupportedMeter": false,
+      "hasLongSilence": false,
+      "notes": ["Downbeat phase remains reviewable rather than silently final."]
+    },
+    "defaults": {
+      "tempoCandidateId": "tempo-124",
+      "beatGridCandidateId": "grid-tight",
+      "downbeatCandidateId": "downbeat-phase-2",
+      "mixInTransitionId": "mix-in-16",
+      "mixOutTransitionId": "mix-out-88",
+      "autoMix": {
+        "status": "risky",
+        "reasons": ["Downbeat phase ambiguity needs review before unattended auto-mix."]
+      }
+    }
+  },
+  "aiReview": {
+    "selectedTempoCandidateId": "tempo-124",
+    "selectedBeatGridCandidateId": "grid-tight",
+    "selectedDownbeatCandidateId": "downbeat-phase-0",
+    "selectedMixInTransitionId": "mix-in-8",
+    "selectedMixOutTransitionId": "mix-out-96",
+    "autoMix": {
+      "status": "approved",
+      "reasons": ["Tempo and grid are stable enough for a conservative phrase-aware mix."]
+    },
+    "notes": ["Synthetic fixture used to exercise resolution precedence."]
+  },
+  "manualOverrides": {
+    "bpm": null,
+    "beatGrid": null,
+    "firstBeatSec": null,
+    "firstDownbeatSec": null,
+    "mixInSec": [],
+    "mixOutSec": [],
+    "autoMixDisabled": false
+  },
+  "effective": null
+}

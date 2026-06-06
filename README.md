@@ -79,6 +79,26 @@ This keeps automatic analysis useful while accepting that beat/downbeat detectio
 
 See `docs/implementation-plan.md` for the canonical project phases.
 
+## Development
+
+The repository uses npm workspaces and TypeScript.
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run build
+```
+
+The initial implementation is schema-first. `packages/metadata` defines track metadata types and effective metadata resolution. It does not perform real audio analysis.
+
+Schema notes and fixture expectations live in:
+
+```text
+docs/schemas/metadata-v1.md
+fixtures/metadata/
+```
+
 ### v0: Import and metadata
 
 - Import local audio files.
