@@ -16,6 +16,7 @@
     "init-overrides": "npm --workspace @luumix/analysis run init-overrides --",
     "report": "npm --workspace @luumix/analysis run report --",
     "resolve": "npm --workspace @luumix/analysis run resolve --",
+    "summarize-evaluations": "npm --workspace @luumix/analysis run summarize-evaluations --",
     "test": "npm run build --workspace @luumix/metadata && npm run test --workspaces --if-present",
     "typecheck": "npm run build --workspace @luumix/metadata && npm run typecheck --workspace @luumix/analysis",
     "validate-evaluation": "npm --workspace @luumix/analysis run validate-evaluation --"

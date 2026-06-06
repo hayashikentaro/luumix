@@ -17,7 +17,9 @@ import {
   createEvaluationTemplate,
   createAiReviewInput,
   parseAnalysisEvaluation,
+  summarizeEvaluations,
   validateEvaluationFile,
+  writeEvaluationSummary,
   writeAiReviewInput,
   writeAiReviewedMetadata,
   writeEvaluationTemplate,
@@ -771,8 +773,208 @@ describe("analysis evaluation notes", () => {
     expect(parseArgs(["validate-evaluation", "track.evaluation.json"])).toEqual({
       command: "validate-evaluation",
       inputPath: "track.evaluation.json",
+      inputPaths: ["track.evaluation.json"],
       outPath: undefined,
       force: false,
+      format: undefined,
+      aiReviewPath: undefined,
+      overridesPath: undefined,
+    });
+  });
+});
+
+describe("evaluation summaries", () => {
+  it("counts multiple evaluation notes and correction types", async () => {
+    const metadata = await createResolvableMetadata();
+    const first = {
+      ...createEvaluationTemplate(metadata, new Date("2026-01-02T03:04:05.000Z")),
+      judgment: {
+        bpm: "correct",
+        beatGrid: "aligned",
+        downbeat: "correct",
+        transitions: "plausible",
+        overall: "usable",
+      },
+      corrections: {
+        bpm: null,
+        firstBeatSec: null,
+        firstDownbeatSec: null,
+        mixInSec: [],
+        mixOutSec: [],
+      },
+      notes: ["Looks usable."],
+    };
+    const second = {
+      ...createEvaluationTemplate(metadata, new Date("2026-01-03T03:04:05.000Z")),
+      sourceContentHash: "sha256:second",
+      judgment: {
+        bpm: "half",
+        beatGrid: "shifted",
+        downbeat: "wrongPhase",
+        transitions: "tooEarly",
+        overall: "needsManualCorrection",
+      },
+      corrections: {
+        bpm: 120,
+        firstBeatSec: 0.25,
+        firstDownbeatSec: 0.5,
+        mixInSec: [16],
+        mixOutSec: [128],
+      },
+      notes: ["Beat grid starts late."],
+    };
+
+    const summary = summarizeEvaluations([
+      parseAnalysisEvaluation(first),
+      parseAnalysisEvaluation(second),
+    ]);
+
+    expect(summary.total).toBe(2);
+    expect(summary.judgments.bpm.correct).toBe(1);
+    expect(summary.judgments.bpm.half).toBe(1);
+    expect(summary.judgments.beatGrid.aligned).toBe(1);
+    expect(summary.judgments.beatGrid.shifted).toBe(1);
+    expect(summary.judgments.downbeat.wrongPhase).toBe(1);
+    expect(summary.judgments.transitions.tooEarly).toBe(1);
+    expect(summary.judgments.overall.needsManualCorrection).toBe(1);
+    expect(summary.correctionCounts).toEqual({
+      bpm: 1,
+      firstBeatSec: 1,
+      firstDownbeatSec: 1,
+      mixInSec: 1,
+      mixOutSec: 1,
+    });
+    expect(summary.notes).toHaveLength(2);
+  });
+
+  it("fails clearly for empty evaluation input", () => {
+    expect(() => summarizeEvaluations([])).toThrow("No evaluation notes");
+  });
+
+  it("writes JSON summaries from a directory of evaluation files", async () => {
+    const metadata = await createResolvableMetadata();
+    const evaluationsDir = join(tempDir, "metadata");
+    const firstPath = join(evaluationsDir, "first.evaluation.json");
+    const secondPath = join(evaluationsDir, "second.evaluation.json");
+    const ignoredPath = join(evaluationsDir, "ignored.json");
+    const outPath = join(tempDir, "summary.json");
+    await mkdir(evaluationsDir, { recursive: true });
+    await writeFile(
+      firstPath,
+      JSON.stringify(createEvaluationTemplate(metadata), null, 2),
+      "utf8",
+    );
+    await writeFile(
+      secondPath,
+      JSON.stringify({
+        ...createEvaluationTemplate(metadata),
+        sourceContentHash: "sha256:second",
+        judgment: {
+          bpm: "wrong",
+          beatGrid: "wrong",
+          downbeat: "ambiguous",
+          transitions: "wrong",
+          overall: "reject",
+        },
+      }),
+      "utf8",
+    );
+    await writeFile(ignoredPath, "{}", "utf8");
+
+    await writeEvaluationSummary({
+      inputPaths: [evaluationsDir],
+      outPath,
+    });
+
+    const summary = JSON.parse(await readFile(outPath, "utf8")) as {
+      total: number;
+      judgments: { overall: { reject: number; unknown: number } };
+    };
+    expect(summary.total).toBe(2);
+    expect(summary.judgments.overall.reject).toBe(1);
+    expect(summary.judgments.overall.unknown).toBe(1);
+  });
+
+  it("writes Markdown summaries for multiple files", async () => {
+    const metadata = await createResolvableMetadata();
+    const firstPath = join(tempDir, "first.evaluation.json");
+    const secondPath = join(tempDir, "second.evaluation.json");
+    const outPath = join(tempDir, "summary.md");
+    await writeFile(firstPath, JSON.stringify(createEvaluationTemplate(metadata)), "utf8");
+    await writeFile(
+      secondPath,
+      JSON.stringify({
+        ...createEvaluationTemplate(metadata),
+        sourceContentHash: "sha256:second",
+        notes: ["Needs downbeat review."],
+      }),
+      "utf8",
+    );
+
+    await writeEvaluationSummary({
+      format: "markdown",
+      inputPaths: [firstPath, secondPath],
+      outPath,
+    });
+
+    const markdown = await readFile(outPath, "utf8");
+    expect(markdown).toContain("# Luumix Evaluation Summary");
+    expect(markdown).toContain("Total evaluations: 2");
+    expect(markdown).toContain("Needs downbeat review.");
+  });
+
+  it("refuses existing summary output without force", async () => {
+    const metadata = await createResolvableMetadata();
+    const inputPath = join(tempDir, "track.evaluation.json");
+    const outPath = join(tempDir, "summary.json");
+    await writeFile(inputPath, JSON.stringify(createEvaluationTemplate(metadata)), "utf8");
+    await writeFile(outPath, "existing", "utf8");
+
+    await expect(
+      writeEvaluationSummary({ inputPaths: [inputPath], outPath }),
+    ).rejects.toThrow("Output already exists");
+  });
+
+  it("fails clearly for invalid evaluation files", async () => {
+    const inputPath = join(tempDir, "invalid.evaluation.json");
+    const outPath = join(tempDir, "summary.json");
+    await writeFile(inputPath, JSON.stringify({ schemaVersion: 1 }), "utf8");
+
+    await expect(
+      writeEvaluationSummary({ inputPaths: [inputPath], outPath }),
+    ).rejects.toThrow("sourceContentHash");
+  });
+
+  it("does not include analysis feature arrays or full timing arrays", async () => {
+    const metadata = await createResolvableMetadata();
+    const summary = summarizeEvaluations([createEvaluationTemplate(metadata)]);
+    const serialized = JSON.stringify(summary);
+
+    expect(serialized).not.toContain("featureSummary");
+    expect(serialized).not.toContain("peakEnvelope");
+    expect(serialized).not.toContain("rmsEnvelope");
+    expect(serialized).not.toContain('"beatsSec":');
+    expect(serialized).not.toContain('"downbeatsSec":');
+  });
+
+  it("parses summarize-evaluations with multiple input paths", () => {
+    expect(
+      parseArgs([
+        "summarize-evaluations",
+        "one.evaluation.json",
+        "two.evaluation.json",
+        "--out",
+        "summary.json",
+        "--format",
+        "markdown",
+      ]),
+    ).toEqual({
+      command: "summarize-evaluations",
+      inputPath: "one.evaluation.json",
+      inputPaths: ["one.evaluation.json", "two.evaluation.json"],
+      outPath: "summary.json",
+      force: false,
+      format: "markdown",
       aiReviewPath: undefined,
       overridesPath: undefined,
     });

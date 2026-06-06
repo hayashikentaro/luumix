@@ -69,6 +69,17 @@ export type {
   TransitionJudgment,
   ValidateEvaluationOptions,
 } from "./evaluation.js";
+export {
+  renderEvaluationSummaryMarkdown,
+  summarizeEvaluations,
+  writeEvaluationSummary,
+} from "./evaluation-summary.js";
+export type {
+  EvaluationNoteSummary,
+  EvaluationSummary,
+  EvaluationSummaryFormat,
+  EvaluationSummaryOptions,
+} from "./evaluation-summary.js";
 export { estimateBeatGridCandidates } from "./beat-grid.js";
 export type { BeatGridEstimationInput } from "./beat-grid.js";
 export {

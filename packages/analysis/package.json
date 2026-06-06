@@ -23,6 +23,7 @@
     "init-overrides": "node ./dist/src/cli.js init-overrides",
     "report": "node ./dist/src/cli.js report",
     "resolve": "node ./dist/src/cli.js resolve",
+    "summarize-evaluations": "node ./dist/src/cli.js summarize-evaluations",
     "test": "vitest run test/cli.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "validate-evaluation": "node ./dist/src/cli.js validate-evaluation"

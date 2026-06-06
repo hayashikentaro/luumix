@@ -92,6 +92,26 @@ Evaluation notes are for local QA and future heuristic improvement. They do not 
 
 Evaluation files may still contain private listening judgments or path hints. Edit `sourcePathHint` if needed, and do not commit or share private evaluation files unless that is intentional.
 
+Summarize multiple local evaluation notes to see where the current pipeline is failing most often:
+
+```bash
+npm run summarize-evaluations -- .luumix/metadata --out .luumix/evaluation-summary.json
+```
+
+You can also pass explicit files, including shell-expanded globs:
+
+```bash
+npm run summarize-evaluations -- .luumix/metadata/*.evaluation.json --out .luumix/evaluation-summary.json
+```
+
+For a readable report:
+
+```bash
+npm run summarize-evaluations -- .luumix/metadata --out .luumix/evaluation-summary.md --format markdown
+```
+
+The summary counts BPM, beat-grid, downbeat, transition, and overall judgments, plus how often manual corrections were needed. Use it to decide which heuristic needs improvement next. Evaluation summaries can still reveal private listening notes or path hints, so keep them local unless intentionally sharing them.
+
 ## Generate AI Review Input
 
 Optionally create a compact JSON summary for AI-assisted review:

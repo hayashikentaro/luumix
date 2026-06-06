@@ -7,6 +7,10 @@ import {
   validateEvaluationFile,
   writeEvaluationTemplate,
 } from "./evaluation.js";
+import {
+  type EvaluationSummaryFormat,
+  writeEvaluationSummary,
+} from "./evaluation-summary.js";
 import { writeAiReviewInput } from "./ai-review-input.js";
 import { writeAiReviewedMetadata } from "./ai-review.js";
 import { analyzeFile } from "./index.js";
@@ -22,10 +26,13 @@ interface ParsedArgs {
     | "init-evaluation"
     | "report"
     | "resolve"
+    | "summarize-evaluations"
     | "validate-evaluation";
   inputPath: string;
+  inputPaths: string[];
   outPath?: string;
   force: boolean;
+  format?: EvaluationSummaryFormat;
   aiReviewPath?: string;
   overridesPath?: string;
 }
@@ -87,6 +94,16 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       return;
     }
 
+    if (args.command === "summarize-evaluations") {
+      await writeEvaluationSummary({
+        inputPaths: args.inputPaths,
+        outPath: args.outPath!,
+        force: args.force,
+        format: args.format,
+      });
+      return;
+    }
+
     if (args.command === "resolve") {
       await writeResolvedMetadata({
         inputPath: args.inputPath,
@@ -113,6 +130,7 @@ export function resolveCliPaths(args: ParsedArgs): ParsedArgs {
   return {
     ...args,
     inputPath: resolveUserPath(args.inputPath),
+    inputPaths: args.inputPaths.map(resolveUserPath),
     outPath: args.outPath ? resolveUserPath(args.outPath) : undefined,
     aiReviewPath: args.aiReviewPath
       ? resolveUserPath(args.aiReviewPath)
@@ -141,17 +159,19 @@ export function parseArgs(argv: string[]): ParsedArgs {
     command !== "init-overrides" &&
     command !== "report" &&
     command !== "resolve" &&
+    command !== "summarize-evaluations" &&
     command !== "validate-evaluation"
   ) {
     throw new Error(
-      "Expected command: analyze, report, ai-input, apply-ai-review, init-evaluation, validate-evaluation, resolve, or init-overrides",
+      "Expected command: analyze, report, ai-input, apply-ai-review, init-evaluation, validate-evaluation, summarize-evaluations, resolve, or init-overrides",
     );
   }
 
-  let inputPath: string | undefined;
+  const inputPaths: string[] = [];
   let outPath: string | undefined;
   let aiReviewPath: string | undefined;
   let overridesPath: string | undefined;
+  let format: EvaluationSummaryFormat | undefined;
   let force = false;
 
   for (let index = 0; index < rest.length; index += 1) {
@@ -163,6 +183,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
       if (!outPath) {
         throw new Error("Missing value for --out");
       }
+      continue;
+    }
+
+    if (arg === "--format") {
+      const value = rest[index + 1];
+      index += 1;
+      if (value !== "json" && value !== "markdown") {
+        throw new Error("Missing or invalid value for --format: expected json or markdown");
+      }
+      format = value;
       continue;
     }
 
@@ -193,13 +223,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
       throw new Error(`Unknown option: ${arg}`);
     }
 
-    if (inputPath) {
+    if (command !== "summarize-evaluations" && inputPaths.length > 0) {
       throw new Error("Expected exactly one input file path");
     }
-    inputPath = arg;
+    inputPaths.push(arg);
   }
 
-  if (!inputPath) {
+  if (inputPaths.length === 0) {
     throw new Error("Missing input file path");
   }
 
@@ -213,9 +243,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   return {
     command,
-    inputPath,
+    inputPath: inputPaths[0]!,
+    inputPaths,
     outPath,
     force,
+    format,
     aiReviewPath,
     overridesPath,
   };
