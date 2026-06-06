@@ -25,7 +25,7 @@ export const SourceFileMetadataSchema = z.object({
   path: z.string().min(1),
   contentHash: z.string().min(1),
   fileSizeBytes: z.number().int().nonnegative().optional(),
-  durationSec: z.number().positive(),
+  durationSec: z.number().nonnegative(),
   sampleRate: z.number().int().positive().optional(),
   channels: z.number().int().positive().optional(),
   codec: z.string().optional(),
@@ -126,9 +126,9 @@ export const AnalysisDefaultsSchema = z.object({
 
 export const AnalysisMetadataSchema = z.object({
   featureSummary: FeatureSummarySchema.optional(),
-  tempoCandidates: z.array(TempoCandidateSchema).min(1),
-  beatGridCandidates: z.array(BeatGridCandidateSchema).min(1),
-  downbeatCandidates: z.array(DownbeatCandidateSchema).min(1),
+  tempoCandidates: z.array(TempoCandidateSchema),
+  beatGridCandidates: z.array(BeatGridCandidateSchema),
+  downbeatCandidates: z.array(DownbeatCandidateSchema),
   structureCandidates: z.array(StructureCandidateSchema),
   transitionCandidates: TransitionCandidatesSchema,
   riskSignals: RiskSignalsSchema,

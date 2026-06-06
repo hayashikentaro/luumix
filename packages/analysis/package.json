@@ -1,8 +1,11 @@
 {
-  "name": "@luumix/metadata",
+  "name": "@luumix/analysis",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "luumix": "./dist/src/cli.js"
+  },
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "exports": {
@@ -12,8 +15,12 @@
     }
   },
   "scripts": {
+    "analyze": "node ./dist/src/cli.js analyze",
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run test/resolve.test.ts",
+    "test": "vitest run test/cli.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@luumix/metadata": "0.0.0"
   }
 }
