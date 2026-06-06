@@ -24,9 +24,11 @@ export function resolveEffectiveMetadata(
   const tempo = selectTempo(metadata);
   const beatGrid = selectBeatGrid(metadata, tempo);
   const downbeat = selectDownbeat(metadata, beatGrid);
-  const mixInSec = selectTransitionTimes(metadata, "mixIn");
-  const mixOutSec = selectTransitionTimes(metadata, "mixOut");
   const autoMix = selectAutoMix(metadata);
+  const mixInSec =
+    autoMix.status === "rejected" ? [] : selectTransitionTimes(metadata, "mixIn");
+  const mixOutSec =
+    autoMix.status === "rejected" ? [] : selectTransitionTimes(metadata, "mixOut");
 
   return {
     schemaVersion: METADATA_SCHEMA_VERSION,

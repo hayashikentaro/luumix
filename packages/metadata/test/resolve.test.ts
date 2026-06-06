@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  parseEffectiveTrackMetadata,
+  parseTrackAnalysisMetadata,
   resolveEffectiveMetadata,
   type TrackAnalysisMetadata,
 } from "../src/index.js";
@@ -18,13 +20,27 @@ const effectiveFixturePath = resolve(
 );
 
 async function loadFixture(): Promise<TrackAnalysisMetadata> {
-  return JSON.parse(await readFile(fixturePath, "utf8")) as TrackAnalysisMetadata;
+  return parseTrackAnalysisMetadata(JSON.parse(await readFile(fixturePath, "utf8")));
 }
 
 describe("resolveEffectiveMetadata", () => {
+  it("validates the sample analysis and effective metadata fixtures", async () => {
+    const analysis = await loadFixture();
+    const effective = parseEffectiveTrackMetadata(
+      JSON.parse(await readFile(effectiveFixturePath, "utf8")),
+    );
+
+    expect(analysis.analysis.tempoCandidates).toHaveLength(3);
+    expect(analysis.analysis.beatGridCandidates.length).toBeGreaterThanOrEqual(1);
+    expect(analysis.analysis.downbeatCandidates).toHaveLength(4);
+    expect(effective.autoMix.status).toBe("approved");
+  });
+
   it("matches the checked-in effective metadata fixture", async () => {
     const metadata = await loadFixture();
-    const expected = JSON.parse(await readFile(effectiveFixturePath, "utf8"));
+    const expected = parseEffectiveTrackMetadata(
+      JSON.parse(await readFile(effectiveFixturePath, "utf8")),
+    );
 
     expect(resolveEffectiveMetadata(metadata)).toEqual(expected);
   });
@@ -45,6 +61,7 @@ describe("resolveEffectiveMetadata", () => {
 
   it("lets manual overrides win over AI review and analysis", async () => {
     const metadata = await loadFixture();
+    const originalAnalysis = structuredClone(metadata.analysis);
     metadata.manualOverrides = {
       ...metadata.manualOverrides,
       bpm: 123.5,
@@ -52,7 +69,6 @@ describe("resolveEffectiveMetadata", () => {
       firstDownbeatSec: 2.202,
       mixInSec: [30],
       mixOutSec: [180],
-      autoMixDisabled: true,
     };
 
     const effective = resolveEffectiveMetadata(metadata);
@@ -65,7 +81,8 @@ describe("resolveEffectiveMetadata", () => {
     expect(effective.downbeat.firstDownbeatSec).toBe(2.202);
     expect(effective.mixInSec).toEqual([30]);
     expect(effective.mixOutSec).toEqual([180]);
-    expect(effective.autoMix.status).toBe("rejected");
+    expect(effective.autoMix.status).toBe("approved");
+    expect(metadata.analysis).toEqual(originalAnalysis);
   });
 
   it("falls back to analysis defaults when AI review is absent", async () => {
@@ -81,5 +98,31 @@ describe("resolveEffectiveMetadata", () => {
     expect(effective.mixInSec).toEqual([31.936]);
     expect(effective.mixOutSec).toEqual([169.806]);
     expect(effective.autoMix.status).toBe("risky");
+  });
+
+  it("resolves rejected or disabled tracks with no transition points", async () => {
+    const aiRejected = await loadFixture();
+    aiRejected.aiReview = {
+      ...aiRejected.aiReview!,
+      autoMix: {
+        status: "rejected",
+        reasons: ["Fixture track is marked unsafe for automatic mixing."],
+      },
+    };
+
+    const aiRejectedEffective = resolveEffectiveMetadata(aiRejected);
+
+    expect(aiRejectedEffective.autoMix.status).toBe("rejected");
+    expect(aiRejectedEffective.mixInSec).toEqual([]);
+    expect(aiRejectedEffective.mixOutSec).toEqual([]);
+
+    const manuallyDisabled = await loadFixture();
+    manuallyDisabled.manualOverrides.autoMixDisabled = true;
+
+    const manuallyDisabledEffective = resolveEffectiveMetadata(manuallyDisabled);
+
+    expect(manuallyDisabledEffective.autoMix.status).toBe("rejected");
+    expect(manuallyDisabledEffective.mixInSec).toEqual([]);
+    expect(manuallyDisabledEffective.mixOutSec).toEqual([]);
   });
 });

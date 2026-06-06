@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/metadata"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
@@ -15,5 +15,8 @@
     "@types/node": "^20.14.10",
     "typescript": "^5.5.3",
     "vitest": "^4.1.8"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
   }
 }

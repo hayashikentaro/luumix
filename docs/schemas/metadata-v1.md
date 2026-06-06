@@ -8,6 +8,12 @@ The TypeScript source of truth is:
 packages/metadata/src/types.ts
 ```
 
+Runtime validation schemas are:
+
+```text
+packages/metadata/src/schemas.ts
+```
+
 The effective resolution implementation is:
 
 ```text
@@ -26,6 +32,8 @@ Resolution precedence:
 ```text
 manualOverrides > aiReview > analysis.defaults
 ```
+
+If the resolved auto-mix decision is `rejected`, the effective metadata keeps the selected timing context but clears `mixInSec` and `mixOutSec`. Future playback code can treat an empty transition list plus rejected status as a safe no-mix state.
 
 ## Candidate Scope
 

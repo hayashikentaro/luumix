@@ -75,12 +75,28 @@
         "supportingSignals": ["Kick accent aligns with phrase start."]
       },
       {
+        "id": "downbeat-phase-1",
+        "beatGridId": "grid-tight",
+        "phaseBeatIndex": 1,
+        "confidence": 0.38,
+        "downbeatsSec": [1.452, 3.387, 5.323, 7.258],
+        "supportingSignals": ["Explicit 4/4 alternate phase retained for review."]
+      },
+      {
         "id": "downbeat-phase-2",
         "beatGridId": "grid-tight",
         "phaseBeatIndex": 2,
         "confidence": 0.51,
         "downbeatsSec": [1.935, 3.871, 5.806, 7.742],
         "supportingSignals": ["Alternate phase retained due to intro ambiguity."]
+      },
+      {
+        "id": "downbeat-phase-3",
+        "beatGridId": "grid-tight",
+        "phaseBeatIndex": 3,
+        "confidence": 0.35,
+        "downbeatsSec": [2.419, 4.355, 6.29, 8.226],
+        "supportingSignals": ["Explicit 4/4 alternate phase retained for review."]
       }
     ],
     "structureCandidates": [
