@@ -22,6 +22,7 @@ import {
   writeAnalysisReport,
 } from "../src/report.js";
 import { estimateBeatGridCandidates } from "../src/beat-grid.js";
+import { estimateDownbeatCandidates } from "../src/downbeat.js";
 import { estimateTempoCandidates } from "../src/tempo.js";
 
 let tempDir: string;
@@ -133,6 +134,54 @@ describe("estimateBeatGridCandidates", () => {
   });
 });
 
+describe("estimateDownbeatCandidates", () => {
+  it("generates four 4/4 phase candidates from a beat grid", () => {
+    const beatGridCandidates = [createBeatGridCandidate()];
+    const candidates = estimateDownbeatCandidates({
+      beatGridCandidates,
+      durationSec: 8,
+      featureSummary: createPulseFeatureSummary(120),
+    });
+
+    expect(candidates).toHaveLength(4);
+    expect(candidates.map((candidate) => candidate.phaseBeatIndex)).toEqual([
+      0,
+      1,
+      2,
+      3,
+    ]);
+    expect(candidates.map((candidate) => candidate.id)).toEqual([
+      "downbeat-phase-0",
+      "downbeat-phase-1",
+      "downbeat-phase-2",
+      "downbeat-phase-3",
+    ]);
+  });
+
+  it("creates downbeat times every four beats for each phase", () => {
+    const candidates = estimateDownbeatCandidates({
+      beatGridCandidates: [createBeatGridCandidate()],
+      durationSec: 8,
+      featureSummary: createPulseFeatureSummary(120),
+    });
+
+    expect(candidates[0]?.downbeatsSec.slice(0, 3)).toEqual([0.5, 2.5, 4.5]);
+    expect(candidates[1]?.downbeatsSec.slice(0, 3)).toEqual([1, 3, 5]);
+    expect(candidates[2]?.downbeatsSec.slice(0, 3)).toEqual([1.5, 3.5, 5.5]);
+    expect(candidates[3]?.downbeatsSec.slice(0, 3)).toEqual([2, 4, 6]);
+  });
+
+  it("returns no candidates without a beat grid", () => {
+    const candidates = estimateDownbeatCandidates({
+      beatGridCandidates: [],
+      durationSec: 8,
+      featureSummary: createPulseFeatureSummary(120),
+    });
+
+    expect(candidates).toEqual([]);
+  });
+});
+
 describe("analyzeFile", () => {
   it("fails for a missing input file", async () => {
     await expect(
@@ -236,9 +285,11 @@ describe("analyzeFile", () => {
     expect(metadata.analysis.defaults.tempoCandidateId).toBe("tempo-primary");
     expect(metadata.analysis.beatGridCandidates).toHaveLength(1);
     expect(metadata.analysis.defaults.beatGridCandidateId).toBe("beat-grid-primary");
-    expect(metadata.analysis.downbeatCandidates).toEqual([]);
+    expect(metadata.analysis.downbeatCandidates).toHaveLength(4);
+    expect(metadata.analysis.defaults.downbeatCandidateId).toBe("downbeat-phase-0");
     expect(metadata.analysis.defaults.autoMix?.status).toBe("rejected");
     expect(metadata.analysis.riskSignals.doubleTempoAmbiguous).toBe(true);
+    expect(metadata.analysis.riskSignals.downbeatAmbiguous).toBe(true);
     expect(metadata.effective).toBeNull();
   });
 
@@ -330,7 +381,7 @@ describe("generateAnalysisReportHtml", () => {
 
     expect(html).toContain("<svg");
     expect(html).toContain('data-overlay-layer="beat-ticks"');
-    expect(html).toContain('data-overlay-layer="future-downbeat-ticks"');
+    expect(html).toContain('data-overlay-layer="downbeat-ticks"');
     expect(html).toContain("Peak envelope");
     expect(html).toContain("RMS envelope");
   });
@@ -343,6 +394,16 @@ describe("generateAnalysisReportHtml", () => {
     expect(html).toContain('data-overlay-layer="beat-ticks"');
     expect(html).toContain('stroke="var(--beat)"');
     expect(html).toContain("Beat ticks");
+  });
+
+  it("includes downbeat tick overlays when downbeat candidates exist", async () => {
+    const metadata = await createTestMetadata(createPulseFeatureSummary(120));
+
+    const html = generateAnalysisReportHtml(metadata);
+
+    expect(html).toContain('data-overlay-layer="downbeat-ticks"');
+    expect(html).toContain('stroke="var(--downbeat)"');
+    expect(html).toContain("Downbeat ticks");
   });
 
   it("handles empty candidate arrays", async () => {
@@ -464,6 +525,17 @@ function createPulseFeatureSummary(bpm: number) {
     peakEnvelope: [...rmsEnvelope],
     rmsEnvelope,
     silenceRangesSec: [],
+  };
+}
+
+function createBeatGridCandidate() {
+  return {
+    id: "beat-grid-primary",
+    tempoCandidateId: "tempo-primary",
+    firstBeatSec: 0.5,
+    confidence: 0.55,
+    stability: 0.55,
+    beatsSec: Array.from({ length: 16 }, (_value, index) => 0.5 + index * 0.5),
   };
 }
 

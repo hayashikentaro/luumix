@@ -60,6 +60,7 @@ export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): str
       --muted: #5f6b77;
       --panel: #f7f9fb;
       --beat: #1a7f37;
+      --downbeat: #8c2daf;
       --rms: #1f6feb;
       --peak: #d1242f;
     }
@@ -150,6 +151,7 @@ export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): str
       width: 18px;
     }
     .swatch.beat { background: var(--beat); }
+    .swatch.downbeat { background: var(--downbeat); }
     .swatch.peak { background: var(--peak); }
     .swatch.rms { background: var(--rms); }
   </style>
@@ -234,6 +236,7 @@ function renderFeatureSummary(metadata: TrackAnalysisMetadata): string {
     ])}
     ${renderEnvelopeSvg({
       beatGrid: getDefaultBeatGridCandidate(metadata),
+      downbeat: getDefaultDownbeatCandidate(metadata),
       durationSec: metadata.sourceFile.durationSec,
       peakEnvelope: summary.peakEnvelope ?? [],
       rmsEnvelope: summary.rmsEnvelope ?? [],
@@ -242,12 +245,14 @@ function renderFeatureSummary(metadata: TrackAnalysisMetadata): string {
       <span><span class="swatch peak"></span>Peak envelope</span>
       <span><span class="swatch rms"></span>RMS envelope</span>
       <span><span class="swatch beat"></span>Beat ticks</span>
+      <span><span class="swatch downbeat"></span>Downbeat ticks</span>
     </div>
   </div>`;
 }
 
 function renderEnvelopeSvg(input: {
   beatGrid?: BeatGridCandidate;
+  downbeat?: DownbeatCandidate;
   durationSec: number;
   peakEnvelope: number[];
   rmsEnvelope: number[];
@@ -267,12 +272,18 @@ function renderEnvelopeSvg(input: {
     height,
     width,
   });
+  const downbeatTicks = renderDownbeatTicks({
+    downbeat: input.downbeat,
+    durationSec: input.durationSec,
+    height,
+    width,
+  });
 
   return `<svg class="envelope" viewBox="0 0 ${width} ${height}" role="img" aria-label="Feature envelope">
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
     <line x1="0" y1="${centerY}" x2="${width}" y2="${centerY}" stroke="#d7dce2"></line>
     <g data-overlay-layer="beat-ticks">${beatTicks}</g>
-    <g data-overlay-layer="future-downbeat-ticks"></g>
+    <g data-overlay-layer="downbeat-ticks">${downbeatTicks}</g>
     ${peakPath ? `<path d="${peakPath}" fill="none" stroke="var(--peak)" stroke-width="2"></path>` : ""}
     ${rmsPath ? `<path d="${rmsPath}" fill="none" stroke="var(--rms)" stroke-width="2"></path>` : ""}
   </svg>`;
@@ -285,6 +296,16 @@ function getDefaultBeatGridCandidate(
   return (
     metadata.analysis.beatGridCandidates.find((candidate) => candidate.id === defaultId) ??
     metadata.analysis.beatGridCandidates[0]
+  );
+}
+
+function getDefaultDownbeatCandidate(
+  metadata: TrackAnalysisMetadata,
+): DownbeatCandidate | undefined {
+  const defaultId = metadata.analysis.defaults.downbeatCandidateId;
+  return (
+    metadata.analysis.downbeatCandidates.find((candidate) => candidate.id === defaultId) ??
+    metadata.analysis.downbeatCandidates[0]
   );
 }
 
@@ -303,6 +324,25 @@ function renderBeatTicks(input: {
     .map((beatSec) => {
       const x = Number(((beatSec / input.durationSec) * input.width).toFixed(3));
       return `<line x1="${x}" y1="0" x2="${x}" y2="${input.height}" stroke="var(--beat)" stroke-width="1" opacity="0.35"></line>`;
+    })
+    .join("");
+}
+
+function renderDownbeatTicks(input: {
+  downbeat?: DownbeatCandidate;
+  durationSec: number;
+  height: number;
+  width: number;
+}): string {
+  if (!input.downbeat || input.durationSec <= 0) {
+    return "";
+  }
+
+  return input.downbeat.downbeatsSec
+    .filter((downbeatSec) => downbeatSec >= 0 && downbeatSec <= input.durationSec)
+    .map((downbeatSec) => {
+      const x = Number(((downbeatSec / input.durationSec) * input.width).toFixed(3));
+      return `<line x1="${x}" y1="0" x2="${x}" y2="${input.height}" stroke="var(--downbeat)" stroke-width="3" opacity="0.55"></line>`;
     })
     .join("");
 }

@@ -59,7 +59,9 @@ Feature arrays are derived at import time from decoded mono PCM and are not raw 
 
 The first tempo candidates are heuristic estimates derived from the low-level feature summary. They are stored as multiple hypotheses, including half/double alternatives when available.
 
-The first beat grid candidates are heuristic phase alignments from the selected tempo candidate and feature summary. They are intended for visual inspection and future correction, not as final playback-safe timing. Downbeat, phrase, transition scoring, and playback analysis are still intentionally not implemented.
+The first beat grid candidates are heuristic phase alignments from the selected tempo candidate and feature summary. They are intended for visual inspection and future correction, not as final playback-safe timing.
+
+The first downbeat candidates are four explicit 4/4 phase hypotheses generated from the beat grid. They are not confirmed musical downbeats; AI review or human correction must choose the usable bar phase later. Phrase detection, transition scoring, and playback analysis are still intentionally not implemented.
 
 ## Fixtures
 

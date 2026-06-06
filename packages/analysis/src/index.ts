@@ -3,6 +3,7 @@ import {
   parseTrackAnalysisMetadata,
   type FeatureSummary,
   type BeatGridCandidate,
+  type DownbeatCandidate,
   type TempoCandidate,
   type TrackAnalysisMetadata,
 } from "@luumix/metadata";
@@ -19,10 +20,19 @@ import {
   type AudioProbeResult,
 } from "./probe.js";
 import { estimateBeatGridCandidates } from "./beat-grid.js";
+import {
+  estimateDownbeatCandidates,
+  isDownbeatAmbiguous,
+} from "./downbeat.js";
 import { estimateTempoCandidates } from "./tempo.js";
 
 export { estimateBeatGridCandidates } from "./beat-grid.js";
 export type { BeatGridEstimationInput } from "./beat-grid.js";
+export {
+  estimateDownbeatCandidates,
+  isDownbeatAmbiguous,
+} from "./downbeat.js";
+export type { DownbeatEstimationInput } from "./downbeat.js";
 export { estimateTempoCandidates } from "./tempo.js";
 export type { TempoEstimationOptions } from "./tempo.js";
 
@@ -91,6 +101,12 @@ export function createPlaceholderMetadata(input: {
   const primaryBeatGridCandidate = beatGridCandidates.find(
     (candidate) => candidate.id === "beat-grid-primary",
   );
+  const downbeatCandidates = estimateDownbeatCandidates({
+    beatGridCandidates,
+    durationSec: input.audioProbe.durationSec,
+    featureSummary: input.featureSummary,
+  });
+  const primaryDownbeatCandidate = getHighestConfidenceDownbeat(downbeatCandidates);
 
   return {
     schemaVersion: METADATA_SCHEMA_VERSION,
@@ -108,7 +124,7 @@ export function createPlaceholderMetadata(input: {
       featureSummary: input.featureSummary,
       tempoCandidates,
       beatGridCandidates,
-      downbeatCandidates: [],
+      downbeatCandidates,
       structureCandidates: [],
       transitionCandidates: {
         mixIn: [],
@@ -117,20 +133,27 @@ export function createPlaceholderMetadata(input: {
       },
       riskSignals: {
         tempoUnstable: isTempoUnstable(tempoCandidates),
-        downbeatAmbiguous: true,
+        downbeatAmbiguous: isDownbeatAmbiguous(downbeatCandidates),
         doubleTempoAmbiguous: hasDerivedTempoAlternatives(tempoCandidates),
-        lowConfidence: isLowConfidenceAnalysis(tempoCandidates, beatGridCandidates),
-        notes: buildRiskNotes(tempoCandidates, beatGridCandidates),
+        lowConfidence: isLowConfidenceAnalysis(
+          tempoCandidates,
+          beatGridCandidates,
+          downbeatCandidates,
+        ),
+        notes: buildRiskNotes(tempoCandidates, beatGridCandidates, downbeatCandidates),
       },
       defaults: {
         ...(primaryTempoCandidate ? { tempoCandidateId: primaryTempoCandidate.id } : {}),
         ...(primaryBeatGridCandidate
           ? { beatGridCandidateId: primaryBeatGridCandidate.id }
           : {}),
+        ...(primaryDownbeatCandidate
+          ? { downbeatCandidateId: primaryDownbeatCandidate.id }
+          : {}),
         autoMix: {
           status: "rejected",
           reasons: [
-            "Downbeat and bar-phase analysis are not implemented, so this track is not safe for automatic mixing.",
+            "Downbeat phase candidates are heuristic and phrase/transition scoring is not implemented, so this track is not safe for automatic mixing.",
           ],
         },
       },
@@ -162,15 +185,19 @@ function isLowConfidenceTempo(tempoCandidates: TempoCandidate[]): boolean {
 function isLowConfidenceAnalysis(
   tempoCandidates: TempoCandidate[],
   beatGridCandidates: BeatGridCandidate[],
+  downbeatCandidates: DownbeatCandidate[],
 ): boolean {
   const primaryBeatGrid = beatGridCandidates.find(
     (candidate) => candidate.id === "beat-grid-primary",
   );
+  const primaryDownbeat = getHighestConfidenceDownbeat(downbeatCandidates);
 
   return (
     isLowConfidenceTempo(tempoCandidates) ||
     !primaryBeatGrid ||
-    primaryBeatGrid.confidence < 0.5
+    primaryBeatGrid.confidence < 0.5 ||
+    !primaryDownbeat ||
+    primaryDownbeat.confidence < 0.4
   );
 }
 
@@ -184,6 +211,7 @@ function hasDerivedTempoAlternatives(tempoCandidates: TempoCandidate[]): boolean
 function buildRiskNotes(
   tempoCandidates: TempoCandidate[],
   beatGridCandidates: BeatGridCandidate[],
+  downbeatCandidates: DownbeatCandidate[],
 ): string[] {
   if (tempoCandidates.length === 0) {
     return [
@@ -196,13 +224,33 @@ function buildRiskNotes(
     return [
       "Tempo candidates are heuristic estimates from low-level feature summaries.",
       "Beat grid estimation did not find a plausible phase alignment.",
-      "Downbeat analysis is not implemented.",
+      "Downbeat phase candidates were not generated without a beat grid.",
+    ];
+  }
+
+  if (downbeatCandidates.length === 0) {
+    return [
+      "Tempo candidates are heuristic estimates from low-level feature summaries.",
+      "Beat grid candidates are heuristic phase alignments against low-level feature summaries.",
+      "Downbeat phase candidates were not generated.",
     ];
   }
 
   return [
     "Tempo candidates are heuristic estimates from low-level feature summaries.",
     "Beat grid candidates are heuristic phase alignments against low-level feature summaries.",
-    "Downbeat analysis is not implemented.",
+    "Downbeat candidates are four 4/4 phase hypotheses, not confirmed musical downbeats.",
   ];
+}
+
+function getHighestConfidenceDownbeat(
+  candidates: DownbeatCandidate[],
+): DownbeatCandidate | undefined {
+  return candidates.reduce<DownbeatCandidate | undefined>((best, candidate) => {
+    if (!best || candidate.confidence > best.confidence) {
+      return candidate;
+    }
+
+    return best;
+  }, undefined);
 }
