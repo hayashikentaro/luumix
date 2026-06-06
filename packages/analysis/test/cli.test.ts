@@ -21,6 +21,7 @@ import {
   generateAnalysisReportHtml,
   writeAnalysisReport,
 } from "../src/report.js";
+import { estimateTempoCandidates } from "../src/tempo.js";
 
 let tempDir: string;
 
@@ -49,6 +50,38 @@ const featureSummary = {
   rmsEnvelope: [0, 0.353553, 0.176777],
   silenceRangesSec: [],
 };
+
+describe("estimateTempoCandidates", () => {
+  it("detects a primary candidate near 120 BPM from a synthetic pulse train", () => {
+    const candidates = estimateTempoCandidates(createPulseFeatureSummary(120));
+
+    expect(candidates[0]?.id).toBe("tempo-primary");
+    expect(candidates[0]?.bpm).toBeCloseTo(120, 3);
+    expect(candidates[0]?.source).toBe("heuristic");
+    expect(candidates[0]?.confidence).toBeGreaterThan(0.5);
+  });
+
+  it("includes half and double alternatives when a primary candidate exists", () => {
+    const candidates = estimateTempoCandidates(createPulseFeatureSummary(120));
+
+    expect(candidates.map((candidate) => candidate.id)).toEqual([
+      "tempo-primary",
+      "tempo-half",
+      "tempo-double",
+    ]);
+    expect(candidates.find((candidate) => candidate.id === "tempo-half")?.bpm).toBe(60);
+    expect(candidates.find((candidate) => candidate.id === "tempo-double")?.bpm).toBe(240);
+  });
+
+  it("returns no candidates for flat input", () => {
+    const candidates = estimateTempoCandidates({
+      frameHopSec: 0.1,
+      rmsEnvelope: new Array(40).fill(0),
+    });
+
+    expect(candidates).toEqual([]);
+  });
+});
 
 describe("analyzeFile", () => {
   it("fails for a missing input file", async () => {
@@ -131,6 +164,30 @@ describe("analyzeFile", () => {
     expect(metadata.analysis.defaults.autoMix?.status).toBe("rejected");
     expect(metadata.analysis.riskSignals.lowConfidence).toBe(true);
     expect(metadata.aiReview).toBeNull();
+    expect(metadata.effective).toBeNull();
+  });
+
+  it("writes schema-valid tempo candidates from extracted features", async () => {
+    const inputPath = join(tempDir, "track.wav");
+    const outPath = join(tempDir, "nested", "track.analysis.json");
+    await writeFile(inputPath, "placeholder audio bytes", "utf8");
+
+    await analyzeFile({
+      extractFeatures: async () => createPulseFeatureSummary(120),
+      inputPath,
+      outPath,
+      probeAudio: async () => probeResult,
+    });
+
+    const metadata = await readMetadata(outPath);
+
+    expect(metadata.analysis.tempoCandidates).toHaveLength(3);
+    expect(metadata.analysis.tempoCandidates[0]?.bpm).toBeCloseTo(120, 3);
+    expect(metadata.analysis.defaults.tempoCandidateId).toBe("tempo-primary");
+    expect(metadata.analysis.beatGridCandidates).toEqual([]);
+    expect(metadata.analysis.downbeatCandidates).toEqual([]);
+    expect(metadata.analysis.defaults.autoMix?.status).toBe("rejected");
+    expect(metadata.analysis.riskSignals.doubleTempoAmbiguous).toBe(true);
     expect(metadata.effective).toBeNull();
   });
 
@@ -329,6 +386,23 @@ async function createTestMetadata() {
     outPath,
     probeAudio: async () => probeResult,
   });
+}
+
+function createPulseFeatureSummary(bpm: number) {
+  const frameHopSec = 0.1;
+  const beatFrames = Math.round(60 / (bpm * frameHopSec));
+  const rmsEnvelope = new Array(80).fill(0.05);
+
+  for (let index = 0; index < rmsEnvelope.length; index += beatFrames) {
+    rmsEnvelope[index] = 1;
+  }
+
+  return {
+    frameHopSec,
+    peakEnvelope: [...rmsEnvelope],
+    rmsEnvelope,
+    silenceRangesSec: [],
+  };
 }
 
 describe("createFfmpegFeatureExtractor", () => {

@@ -2,6 +2,7 @@ import {
   METADATA_SCHEMA_VERSION,
   parseTrackAnalysisMetadata,
   type FeatureSummary,
+  type TempoCandidate,
   type TrackAnalysisMetadata,
 } from "@luumix/metadata";
 import { createHash } from "node:crypto";
@@ -16,6 +17,10 @@ import {
   type AudioProbe,
   type AudioProbeResult,
 } from "./probe.js";
+import { estimateTempoCandidates } from "./tempo.js";
+
+export { estimateTempoCandidates } from "./tempo.js";
+export type { TempoEstimationOptions } from "./tempo.js";
 
 export interface AnalyzeOptions {
   inputPath: string;
@@ -70,6 +75,10 @@ export function createPlaceholderMetadata(input: {
   inputPath: string;
 }): TrackAnalysisMetadata {
   const contentHash = createHash("sha256").update(input.content).digest("hex");
+  const tempoCandidates = estimateTempoCandidates(input.featureSummary);
+  const primaryTempoCandidate = tempoCandidates.find(
+    (candidate) => candidate.id === "tempo-primary",
+  );
 
   return {
     schemaVersion: METADATA_SCHEMA_VERSION,
@@ -85,7 +94,7 @@ export function createPlaceholderMetadata(input: {
     },
     analysis: {
       featureSummary: input.featureSummary,
-      tempoCandidates: [],
+      tempoCandidates,
       beatGridCandidates: [],
       downbeatCandidates: [],
       structureCandidates: [],
@@ -95,19 +104,18 @@ export function createPlaceholderMetadata(input: {
         avoid: [],
       },
       riskSignals: {
-        tempoUnstable: true,
+        tempoUnstable: isTempoUnstable(tempoCandidates),
         downbeatAmbiguous: true,
-        doubleTempoAmbiguous: true,
-        lowConfidence: true,
-        notes: [
-          "Source audio was probed, but rhythm analysis is not implemented.",
-        ],
+        doubleTempoAmbiguous: hasDerivedTempoAlternatives(tempoCandidates),
+        lowConfidence: isLowConfidenceTempo(tempoCandidates),
+        notes: buildRiskNotes(tempoCandidates),
       },
       defaults: {
+        ...(primaryTempoCandidate ? { tempoCandidateId: primaryTempoCandidate.id } : {}),
         autoMix: {
           status: "rejected",
           reasons: [
-            "Rhythm analysis is not implemented, so this track is not safe for automatic mixing.",
+            "Beat grid and downbeat analysis are not implemented, so this track is not safe for automatic mixing.",
           ],
         },
       },
@@ -124,4 +132,35 @@ export function createPlaceholderMetadata(input: {
     },
     effective: null,
   };
+}
+
+function isTempoUnstable(tempoCandidates: TempoCandidate[]): boolean {
+  const primary = tempoCandidates.find((candidate) => candidate.id === "tempo-primary");
+  return !primary || primary.confidence < 0.6;
+}
+
+function isLowConfidenceTempo(tempoCandidates: TempoCandidate[]): boolean {
+  const primary = tempoCandidates.find((candidate) => candidate.id === "tempo-primary");
+  return !primary || primary.confidence < 0.5;
+}
+
+function hasDerivedTempoAlternatives(tempoCandidates: TempoCandidate[]): boolean {
+  return tempoCandidates.some(
+    (candidate) =>
+      candidate.source === "derived-half" || candidate.source === "derived-double",
+  );
+}
+
+function buildRiskNotes(tempoCandidates: TempoCandidate[]): string[] {
+  if (tempoCandidates.length === 0) {
+    return [
+      "Tempo estimation did not find a plausible candidate from the low-level feature summary.",
+      "Beat grid and downbeat analysis are not implemented.",
+    ];
+  }
+
+  return [
+    "Tempo candidates are heuristic estimates from low-level feature summaries.",
+    "Beat grid and downbeat analysis are not implemented.",
+  ];
 }
