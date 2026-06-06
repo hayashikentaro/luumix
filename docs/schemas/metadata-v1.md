@@ -63,6 +63,8 @@ The first beat grid candidates are heuristic phase alignments from the selected 
 
 The first downbeat candidates are four explicit 4/4 phase hypotheses generated from the beat grid. They are not confirmed musical downbeats; AI review or human correction must choose the usable bar phase later. Phrase detection, transition scoring, and playback analysis are still intentionally not implemented.
 
+The first structure and transition candidates are conservative bar-aligned hints generated from the selected downbeat grid. They can mark possible first usable downbeats, intro ends, section changes, outro starts, mix-in points, and mix-out points for inspection. They are not full song-section recognition and are not treated as DJ-safe transitions without later review.
+
 ## Fixtures
 
 Sample metadata fixtures are synthetic and illustrative:

@@ -23,6 +23,10 @@ import {
 } from "../src/report.js";
 import { estimateBeatGridCandidates } from "../src/beat-grid.js";
 import { estimateDownbeatCandidates } from "../src/downbeat.js";
+import {
+  estimateStructureCandidates,
+  estimateTransitionCandidates,
+} from "../src/structure.js";
 import { estimateTempoCandidates } from "../src/tempo.js";
 
 let tempDir: string;
@@ -182,6 +186,59 @@ describe("estimateDownbeatCandidates", () => {
   });
 });
 
+describe("structure and transition estimation", () => {
+  it("generates first usable, intro, and outro structure candidates", () => {
+    const candidates = estimateStructureCandidates({
+      beatGridCandidates: [createBeatGridCandidate(180)],
+      downbeatCandidates: [createDownbeatCandidate(180)],
+      durationSec: 180,
+      featureSummary: createPulseFeatureSummary(120, 180),
+    });
+
+    expect(candidates.map((candidate) => candidate.kind)).toContain(
+      "firstUsableDownbeat",
+    );
+    expect(candidates.map((candidate) => candidate.kind)).toContain("introEnd");
+    expect(candidates.map((candidate) => candidate.kind)).toContain("outroStart");
+  });
+
+  it("generates mix-in and mix-out transition candidates from structure candidates", () => {
+    const input = {
+      beatGridCandidates: [createBeatGridCandidate(180)],
+      downbeatCandidates: [createDownbeatCandidate(180)],
+      durationSec: 180,
+      featureSummary: createPulseFeatureSummary(120, 180),
+    };
+    const structureCandidates = estimateStructureCandidates(input);
+    const transitionCandidates = estimateTransitionCandidates({
+      ...input,
+      structureCandidates,
+    });
+
+    expect(transitionCandidates.mixIn.length).toBeGreaterThan(0);
+    expect(transitionCandidates.mixOut.length).toBeGreaterThan(0);
+    expect(transitionCandidates.mixIn[0]?.barNumber).toBeDefined();
+    expect(transitionCandidates.mixOut[0]?.barNumber).toBeDefined();
+  });
+
+  it("returns empty structure and transitions without downbeat candidates", () => {
+    const input = {
+      beatGridCandidates: [createBeatGridCandidate(180)],
+      downbeatCandidates: [],
+      durationSec: 180,
+      featureSummary: createPulseFeatureSummary(120, 180),
+    };
+
+    expect(estimateStructureCandidates(input)).toEqual([]);
+    expect(
+      estimateTransitionCandidates({
+        ...input,
+        structureCandidates: [],
+      }),
+    ).toEqual({ mixIn: [], mixOut: [], avoid: [] });
+  });
+});
+
 describe("analyzeFile", () => {
   it("fails for a missing input file", async () => {
     await expect(
@@ -291,6 +348,31 @@ describe("analyzeFile", () => {
     expect(metadata.analysis.riskSignals.doubleTempoAmbiguous).toBe(true);
     expect(metadata.analysis.riskSignals.downbeatAmbiguous).toBe(true);
     expect(metadata.effective).toBeNull();
+  });
+
+  it("writes structure and transition candidates for a longer detectable track", async () => {
+    const inputPath = join(tempDir, "track.wav");
+    const outPath = join(tempDir, "nested", "track.analysis.json");
+    await writeFile(inputPath, "placeholder audio bytes", "utf8");
+
+    await analyzeFile({
+      extractFeatures: async () => createPulseFeatureSummary(120, 180),
+      inputPath,
+      outPath,
+      probeAudio: async () => ({
+        ...probeResult,
+        durationSec: 180,
+      }),
+    });
+
+    const metadata = await readMetadata(outPath);
+
+    expect(metadata.analysis.structureCandidates.length).toBeGreaterThan(0);
+    expect(metadata.analysis.transitionCandidates.mixIn.length).toBeGreaterThan(0);
+    expect(metadata.analysis.transitionCandidates.mixOut.length).toBeGreaterThan(0);
+    expect(metadata.analysis.defaults.mixInTransitionId).toBeDefined();
+    expect(metadata.analysis.defaults.mixOutTransitionId).toBeDefined();
+    expect(metadata.analysis.defaults.autoMix?.status).toBe("rejected");
   });
 
   it("does not write partial metadata when probing fails", async () => {
@@ -406,6 +488,19 @@ describe("generateAnalysisReportHtml", () => {
     expect(html).toContain("Downbeat ticks");
   });
 
+  it("includes structure and transition candidates", async () => {
+    const metadata = await createTestMetadata(createPulseFeatureSummary(120, 180), {
+      durationSec: 180,
+    });
+
+    const html = generateAnalysisReportHtml(metadata);
+
+    expect(html).toContain("Structure candidates");
+    expect(html).toContain("Mix-in candidates");
+    expect(html).toContain("Mix-out candidates");
+    expect(html).toContain('data-overlay-layer="transition-markers"');
+  });
+
   it("handles empty candidate arrays", async () => {
     const metadata = await createTestMetadata();
 
@@ -499,7 +594,7 @@ describe("computeFeatureSummary", () => {
   });
 });
 
-async function createTestMetadata(summary = featureSummary) {
+async function createTestMetadata(summary = featureSummary, probe = probeResult) {
   const inputPath = join(tempDir, "track.wav");
   const outPath = join(tempDir, `${randomUUID()}.analysis.json`);
   await writeFile(inputPath, "placeholder audio bytes", "utf8");
@@ -507,14 +602,14 @@ async function createTestMetadata(summary = featureSummary) {
     extractFeatures: async () => summary,
     inputPath,
     outPath,
-    probeAudio: async () => probeResult,
+    probeAudio: async () => probe,
   });
 }
 
-function createPulseFeatureSummary(bpm: number) {
+function createPulseFeatureSummary(bpm: number, durationSec = 8) {
   const frameHopSec = 0.1;
   const beatFrames = Math.round(60 / (bpm * frameHopSec));
-  const rmsEnvelope = new Array(80).fill(0.05);
+  const rmsEnvelope = new Array(Math.ceil(durationSec / frameHopSec)).fill(0.05);
 
   for (let index = 0; index < rmsEnvelope.length; index += beatFrames) {
     rmsEnvelope[index] = 1;
@@ -528,14 +623,29 @@ function createPulseFeatureSummary(bpm: number) {
   };
 }
 
-function createBeatGridCandidate() {
+function createBeatGridCandidate(durationSec = 8) {
   return {
     id: "beat-grid-primary",
     tempoCandidateId: "tempo-primary",
     firstBeatSec: 0.5,
     confidence: 0.55,
     stability: 0.55,
-    beatsSec: Array.from({ length: 16 }, (_value, index) => 0.5 + index * 0.5),
+    beatsSec: Array.from(
+      { length: Math.floor((durationSec - 0.5) / 0.5) + 1 },
+      (_value, index) => 0.5 + index * 0.5,
+    ),
+  };
+}
+
+function createDownbeatCandidate(durationSec = 8) {
+  const beatsSec = createBeatGridCandidate(durationSec).beatsSec;
+  return {
+    id: "downbeat-phase-0",
+    beatGridId: "beat-grid-primary",
+    phaseBeatIndex: 0,
+    confidence: 0.42,
+    downbeatsSec: beatsSec.filter((_beatSec, index) => index % 4 === 0),
+    supportingSignals: ["Synthetic test downbeat phase."],
   };
 }
 

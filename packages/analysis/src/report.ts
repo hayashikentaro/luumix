@@ -2,6 +2,7 @@ import {
   parseTrackAnalysisMetadata,
   type BeatGridCandidate,
   type DownbeatCandidate,
+  type StructureCandidate,
   type TempoCandidate,
   type TrackAnalysisMetadata,
   type TransitionCandidate,
@@ -61,6 +62,8 @@ export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): str
       --panel: #f7f9fb;
       --beat: #1a7f37;
       --downbeat: #8c2daf;
+      --mix-in: #0969da;
+      --mix-out: #bf8700;
       --rms: #1f6feb;
       --peak: #d1242f;
     }
@@ -152,6 +155,8 @@ export function generateAnalysisReportHtml(metadata: TrackAnalysisMetadata): str
     }
     .swatch.beat { background: var(--beat); }
     .swatch.downbeat { background: var(--downbeat); }
+    .swatch.mix-in { background: var(--mix-in); }
+    .swatch.mix-out { background: var(--mix-out); }
     .swatch.peak { background: var(--peak); }
     .swatch.rms { background: var(--rms); }
   </style>
@@ -238,6 +243,14 @@ function renderFeatureSummary(metadata: TrackAnalysisMetadata): string {
       beatGrid: getDefaultBeatGridCandidate(metadata),
       downbeat: getDefaultDownbeatCandidate(metadata),
       durationSec: metadata.sourceFile.durationSec,
+      mixIn: getDefaultTransitionCandidate(
+        metadata.analysis.transitionCandidates.mixIn,
+        metadata.analysis.defaults.mixInTransitionId,
+      ),
+      mixOut: getDefaultTransitionCandidate(
+        metadata.analysis.transitionCandidates.mixOut,
+        metadata.analysis.defaults.mixOutTransitionId,
+      ),
       peakEnvelope: summary.peakEnvelope ?? [],
       rmsEnvelope: summary.rmsEnvelope ?? [],
     })}
@@ -246,6 +259,8 @@ function renderFeatureSummary(metadata: TrackAnalysisMetadata): string {
       <span><span class="swatch rms"></span>RMS envelope</span>
       <span><span class="swatch beat"></span>Beat ticks</span>
       <span><span class="swatch downbeat"></span>Downbeat ticks</span>
+      <span><span class="swatch mix-in"></span>Mix-in</span>
+      <span><span class="swatch mix-out"></span>Mix-out</span>
     </div>
   </div>`;
 }
@@ -254,6 +269,8 @@ function renderEnvelopeSvg(input: {
   beatGrid?: BeatGridCandidate;
   downbeat?: DownbeatCandidate;
   durationSec: number;
+  mixIn?: TransitionCandidate;
+  mixOut?: TransitionCandidate;
   peakEnvelope: number[];
   rmsEnvelope: number[];
 }): string {
@@ -278,12 +295,20 @@ function renderEnvelopeSvg(input: {
     height,
     width,
   });
+  const transitionMarkers = renderTransitionMarkers({
+    durationSec: input.durationSec,
+    height,
+    mixIn: input.mixIn,
+    mixOut: input.mixOut,
+    width,
+  });
 
   return `<svg class="envelope" viewBox="0 0 ${width} ${height}" role="img" aria-label="Feature envelope">
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
     <line x1="0" y1="${centerY}" x2="${width}" y2="${centerY}" stroke="#d7dce2"></line>
     <g data-overlay-layer="beat-ticks">${beatTicks}</g>
     <g data-overlay-layer="downbeat-ticks">${downbeatTicks}</g>
+    <g data-overlay-layer="transition-markers">${transitionMarkers}</g>
     ${peakPath ? `<path d="${peakPath}" fill="none" stroke="var(--peak)" stroke-width="2"></path>` : ""}
     ${rmsPath ? `<path d="${rmsPath}" fill="none" stroke="var(--rms)" stroke-width="2"></path>` : ""}
   </svg>`;
@@ -307,6 +332,13 @@ function getDefaultDownbeatCandidate(
     metadata.analysis.downbeatCandidates.find((candidate) => candidate.id === defaultId) ??
     metadata.analysis.downbeatCandidates[0]
   );
+}
+
+function getDefaultTransitionCandidate(
+  candidates: TransitionCandidate[],
+  defaultId: string | undefined,
+): TransitionCandidate | undefined {
+  return candidates.find((candidate) => candidate.id === defaultId) ?? candidates[0];
 }
 
 function renderBeatTicks(input: {
@@ -347,6 +379,38 @@ function renderDownbeatTicks(input: {
     .join("");
 }
 
+function renderTransitionMarkers(input: {
+  durationSec: number;
+  height: number;
+  mixIn?: TransitionCandidate;
+  mixOut?: TransitionCandidate;
+  width: number;
+}): string {
+  if (input.durationSec <= 0) {
+    return "";
+  }
+
+  return [
+    input.mixIn ? renderTransitionMarker(input.mixIn, "mix-in", input) : "",
+    input.mixOut ? renderTransitionMarker(input.mixOut, "mix-out", input) : "",
+  ].join("");
+}
+
+function renderTransitionMarker(
+  candidate: TransitionCandidate,
+  className: "mix-in" | "mix-out",
+  input: { durationSec: number; height: number; width: number },
+): string {
+  const x = Number(((candidate.timeSec / input.durationSec) * input.width).toFixed(3));
+  const color = className === "mix-in" ? "var(--mix-in)" : "var(--mix-out)";
+  const label = className === "mix-in" ? "IN" : "OUT";
+
+  return `<g data-transition-marker="${className}">
+    <line x1="${x}" y1="0" x2="${x}" y2="${input.height}" stroke="${color}" stroke-width="4" opacity="0.7"></line>
+    <text x="${x + 6}" y="18" fill="${color}" font-size="14" font-weight="700">${label}</text>
+  </g>`;
+}
+
 function buildEnvelopePath(values: number[], width: number, height: number): string {
   if (values.length === 0) {
     return "";
@@ -369,10 +433,26 @@ function renderCandidateSections(metadata: TrackAnalysisMetadata): string {
     renderTempoCandidates(metadata.analysis.tempoCandidates),
     renderBeatGridCandidates(metadata.analysis.beatGridCandidates),
     renderDownbeatCandidates(metadata.analysis.downbeatCandidates),
+    renderStructureCandidates(metadata.analysis.structureCandidates),
     renderTransitionCandidates(metadata.analysis.transitionCandidates.mixIn, "Mix-in candidates"),
     renderTransitionCandidates(metadata.analysis.transitionCandidates.mixOut, "Mix-out candidates"),
     renderTransitionCandidates(metadata.analysis.transitionCandidates.avoid, "Avoid candidates"),
   ].join("\n");
+}
+
+function renderStructureCandidates(candidates: StructureCandidate[]): string {
+  if (candidates.length === 0) {
+    return renderEmptyCandidateSection("Structure candidates");
+  }
+
+  return `<h3>Structure candidates</h3><table>
+    <thead><tr><th>ID</th><th>Kind</th><th>Time</th><th>Bar</th><th>Confidence</th><th>Reasons</th></tr></thead>
+    <tbody>${candidates
+      .map(
+        (candidate) => `<tr><td>${escapeHtml(candidate.id)}</td><td>${escapeHtml(candidate.kind)}</td><td>${formatNumber(candidate.timeSec)}</td><td>${candidate.barNumber ?? ""}</td><td>${formatNumber(candidate.confidence)}</td><td>${escapeHtml(candidate.reasons?.join("; ") ?? "")}</td></tr>`,
+      )
+      .join("")}</tbody>
+  </table>`;
 }
 
 function renderTempoCandidates(candidates: TempoCandidate[]): string {

@@ -24,6 +24,10 @@ import {
   estimateDownbeatCandidates,
   isDownbeatAmbiguous,
 } from "./downbeat.js";
+import {
+  estimateStructureCandidates,
+  estimateTransitionCandidates,
+} from "./structure.js";
 import { estimateTempoCandidates } from "./tempo.js";
 
 export { estimateBeatGridCandidates } from "./beat-grid.js";
@@ -33,6 +37,14 @@ export {
   isDownbeatAmbiguous,
 } from "./downbeat.js";
 export type { DownbeatEstimationInput } from "./downbeat.js";
+export {
+  estimateStructureCandidates,
+  estimateTransitionCandidates,
+} from "./structure.js";
+export type {
+  StructureEstimationInput,
+  TransitionEstimationInput,
+} from "./structure.js";
 export { estimateTempoCandidates } from "./tempo.js";
 export type { TempoEstimationOptions } from "./tempo.js";
 
@@ -107,6 +119,21 @@ export function createPlaceholderMetadata(input: {
     featureSummary: input.featureSummary,
   });
   const primaryDownbeatCandidate = getHighestConfidenceDownbeat(downbeatCandidates);
+  const structureCandidates = estimateStructureCandidates({
+    beatGridCandidates,
+    downbeatCandidates,
+    durationSec: input.audioProbe.durationSec,
+    featureSummary: input.featureSummary,
+  });
+  const transitionCandidates = estimateTransitionCandidates({
+    beatGridCandidates,
+    downbeatCandidates,
+    durationSec: input.audioProbe.durationSec,
+    featureSummary: input.featureSummary,
+    structureCandidates,
+  });
+  const defaultMixIn = transitionCandidates.mixIn[0];
+  const defaultMixOut = transitionCandidates.mixOut[0];
 
   return {
     schemaVersion: METADATA_SCHEMA_VERSION,
@@ -125,12 +152,8 @@ export function createPlaceholderMetadata(input: {
       tempoCandidates,
       beatGridCandidates,
       downbeatCandidates,
-      structureCandidates: [],
-      transitionCandidates: {
-        mixIn: [],
-        mixOut: [],
-        avoid: [],
-      },
+      structureCandidates,
+      transitionCandidates,
       riskSignals: {
         tempoUnstable: isTempoUnstable(tempoCandidates),
         downbeatAmbiguous: isDownbeatAmbiguous(downbeatCandidates),
@@ -150,10 +173,12 @@ export function createPlaceholderMetadata(input: {
         ...(primaryDownbeatCandidate
           ? { downbeatCandidateId: primaryDownbeatCandidate.id }
           : {}),
+        ...(defaultMixIn ? { mixInTransitionId: defaultMixIn.id } : {}),
+        ...(defaultMixOut ? { mixOutTransitionId: defaultMixOut.id } : {}),
         autoMix: {
           status: "rejected",
           reasons: [
-            "Downbeat phase candidates are heuristic and phrase/transition scoring is not implemented, so this track is not safe for automatic mixing.",
+            "Structure and transition candidates are heuristic and not user-confirmed, so this track is not safe for automatic mixing.",
           ],
         },
       },
@@ -240,6 +265,7 @@ function buildRiskNotes(
     "Tempo candidates are heuristic estimates from low-level feature summaries.",
     "Beat grid candidates are heuristic phase alignments against low-level feature summaries.",
     "Downbeat candidates are four 4/4 phase hypotheses, not confirmed musical downbeats.",
+    "Structure and transition candidates are bar-aligned inspection hints, not confirmed DJ-safe mix points.",
   ];
 }
 
