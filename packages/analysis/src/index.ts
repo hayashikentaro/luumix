@@ -6,11 +6,17 @@ import {
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import {
+  probeAudioFile,
+  type AudioProbe,
+  type AudioProbeResult,
+} from "./probe.js";
 
 export interface AnalyzeOptions {
   inputPath: string;
   outPath: string;
   force?: boolean;
+  probeAudio?: AudioProbe;
 }
 
 export async function analyzeFile(options: AnalyzeOptions): Promise<TrackAnalysisMetadata> {
@@ -31,7 +37,9 @@ export async function analyzeFile(options: AnalyzeOptions): Promise<TrackAnalysi
   }
 
   const content = await readFile(options.inputPath);
+  const audioProbe = await (options.probeAudio ?? probeAudioFile)(options.inputPath);
   const metadata = createPlaceholderMetadata({
+    audioProbe,
     content,
     fileSizeBytes: inputStat.size,
     inputPath: options.inputPath,
@@ -45,6 +53,7 @@ export async function analyzeFile(options: AnalyzeOptions): Promise<TrackAnalysi
 }
 
 export function createPlaceholderMetadata(input: {
+  audioProbe: AudioProbeResult;
   content: Buffer;
   fileSizeBytes: number;
   inputPath: string;
@@ -57,7 +66,11 @@ export function createPlaceholderMetadata(input: {
       path: input.inputPath,
       contentHash: `sha256:${contentHash}`,
       fileSizeBytes: input.fileSizeBytes,
-      durationSec: 0,
+      durationSec: input.audioProbe.durationSec,
+      sampleRate: input.audioProbe.sampleRate,
+      channels: input.audioProbe.channels,
+      codec: input.audioProbe.codec,
+      container: input.audioProbe.container,
     },
     analysis: {
       tempoCandidates: [],
@@ -75,14 +88,14 @@ export function createPlaceholderMetadata(input: {
         doubleTempoAmbiguous: true,
         lowConfidence: true,
         notes: [
-          "Placeholder metadata only. Audio probing and real rhythm analysis are not implemented.",
+          "Source audio was probed, but rhythm analysis is not implemented.",
         ],
       },
       defaults: {
         autoMix: {
           status: "rejected",
           reasons: [
-            "Audio probing is not implemented, so this track is not safe for automatic mixing.",
+            "Rhythm analysis is not implemented, so this track is not safe for automatic mixing.",
           ],
         },
       },
